@@ -52,7 +52,7 @@ class DepthTransform(VideoTransform, DepthTask):
     """
 
     META_HEADER = DEPTH_META_HEADER
-    ACCEPTS_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = backend.CUDA_INFERENCE_FRAME_CAPABILITIES
 
     __gstmetadata__ = (
         "Depth",

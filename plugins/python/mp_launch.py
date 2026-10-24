@@ -149,13 +149,14 @@ G2G_CAPS_PROPERTIES = {
     "OUTPUT_CAPS": "output-caps",
 }
 
-#: The class constants that say an element takes CUDA frames, and the value
-#: that says so.
-DEVICE_FRAME_CONSTANTS = {
-    "ACCEPTS_DEVICE_FRAMES": True,
-    "DRAWS_ON_DEVICE_FRAMES": True,
-    "READS_PIXELS": False,
+#: The typed capability descriptions that accept CUDA frames.
+CUDA_FRAME_CAPABILITIES = {
+    "CUDA_INFERENCE_FRAME_CAPABILITIES",
+    "CUDA_DRAW_FRAME_CAPABILITIES",
+    "CUDA_RGBA_DRAW_FRAME_CAPABILITIES",
+    "METADATA_FRAME_CAPABILITIES",
 }
+FRAME_CAPABILITIES_CONSTANT = "FRAME_CAPABILITIES"
 
 #: The g2g decoders that leave their frames in CUDA memory, and the host
 #: property and format that take those frames as they are.
@@ -260,28 +261,29 @@ def caps_declarations(tree):
             if f"{node.name}.{constant}" in constants
         }
         bases = [base.id for base in node.bases if isinstance(base, ast.Name)]
-        stated = bool_constants(node)
-        takes_device_frames = [
-            stated[name] == value
-            for name, value in DEVICE_FRAME_CONSTANTS.items()
-            if name in stated
-        ]
+        capabilities = frame_capabilities_name(node)
         declarations[node.name] = ClassDeclaration(
-            bases, caps, any(takes_device_frames) if takes_device_frames else None
+            bases,
+            caps,
+            capabilities in CUDA_FRAME_CAPABILITIES if capabilities else None,
         )
     return declarations
 
 
-def bool_constants(class_node):
-    return {
-        target.id: statement.value.value
-        for statement in class_node.body
-        if isinstance(statement, ast.Assign)
-        and isinstance(statement.value, ast.Constant)
-        and isinstance(statement.value.value, bool)
-        for target in statement.targets
-        if isinstance(target, ast.Name)
-    }
+def frame_capabilities_name(class_node):
+    for statement in class_node.body:
+        if not isinstance(statement, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == FRAME_CAPABILITIES_CONSTANT
+            for target in statement.targets
+        ):
+            continue
+        if isinstance(statement.value, ast.Name):
+            return statement.value.id
+        if isinstance(statement.value, ast.Attribute):
+            return statement.value.attr
+    return None
 
 
 def class_lineage(cls, declarations):

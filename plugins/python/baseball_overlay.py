@@ -8,15 +8,13 @@
 import re
 
 import backend
-from backend import analytics, GObject, InPlaceVideoTransform
+from backend import (
+    analytics,
+    GObject,
+    InPlaceVideoTransform,
+    CUDA_DRAW_FRAME_CAPABILITIES,
+)
 from sport_overlay_drawing import drawing_for
-
-if backend.BACKEND == "gst":
-    from backend.gst import Gst
-
-    OVERLAY_CAPS = Gst.Caps.from_string(
-        "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
-    )
 
 # coco class names the stock yolo weights emit
 PERSON_LABEL = "person"
@@ -153,16 +151,7 @@ class BaseballOverlay(InPlaceVideoTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    if backend.BACKEND == "gst":
-        src_template = Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, OVERLAY_CAPS.copy()
-        )
-        sink_template = Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, OVERLAY_CAPS.copy()
-        )
-        __gsttemplates__ = (src_template, sink_template)
-
-    DRAWS_ON_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = CUDA_DRAW_FRAME_CAPABILITIES
 
     show_labels = GObject.Property(
         type=bool,

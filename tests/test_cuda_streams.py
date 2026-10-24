@@ -14,7 +14,7 @@ from gi.repository import Gst  # noqa: E402
 Gst.init(None)
 torch = pytest.importorskip("torch")
 
-from backend import VideoTransform  # noqa: E402
+from backend import VideoTransform, CUDA_INFERENCE_FRAME_CAPABILITIES  # noqa: E402
 from engine.engine_factory import EngineFactory  # noqa: E402
 from engine.pytorch_engine import PyTorchEngine  # noqa: E402
 
@@ -46,7 +46,7 @@ class CurrentStreamRecorder(VideoTransform):
         "records the cuda stream each frame is inferred on",
         "test",
     )
-    ACCEPTS_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = CUDA_INFERENCE_FRAME_CAPABILITIES
 
     def __init__(self):
         super().__init__()

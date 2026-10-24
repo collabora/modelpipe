@@ -22,6 +22,7 @@ backend.
   - segmentation with SAM2
   - OCR
   - face detection and recognition
+  - detection-driven blur, pixelation and blackout
   - optical flow
   - super-resolution
   - action recognition

@@ -50,8 +50,8 @@ def is_vulkan_memory(memory):
     return GstVulkan is not None and GstVulkan.is_vulkan_memory(memory)
 
 
-# Support CPU, CUDA, OpenGL, and Vulkan buffers
-VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:CUDAMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
+# Support CPU, CUDA, and OpenGL buffers
+VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:CUDAMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
 # Building a Gst object needs Gst.init, which only the gst backend calls.
 if backend.BACKEND == "gst":
     OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)

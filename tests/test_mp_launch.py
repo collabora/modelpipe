@@ -28,6 +28,9 @@ def test_element_shells_finds_the_hosted_elements(shells):
     )
     assert shells["mp_objectdetector"].module == "objectdetector"
     assert shells["mp_overlay"] == mp_launch.ElementShell("overlay", "Overlay")
+    assert shells["mp_anonymize"] == mp_launch.ElementShell(
+        "anonymize", "Anonymize", reads_device_frames=True
+    )
 
 
 def test_an_element_several_chains_feed_becomes_the_batching_host(shells):
@@ -385,6 +388,7 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "mp_depth",
         "mp_superres",
         "mp_tracker",
+        "mp_anonymize",
         "mp_football_overlay",
         "mp_baseball_overlay",
         "mp_overlay_counter",

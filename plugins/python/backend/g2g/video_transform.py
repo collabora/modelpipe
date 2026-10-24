@@ -22,6 +22,7 @@ from backend.g2g.cuda_frames import rgb_device_frame
 from backend.g2g.frameio import DEVICE_FRAME, as_rgb, frameio
 from backend.core import FrameProcessingMixin
 from backend.g2g.transform import BaseTransform
+from backend.video_frame import SYSTEM_INFERENCE_FRAME_CAPABILITIES
 
 
 DEVICE_FRAME_FORMAT = "RGB"
@@ -29,6 +30,8 @@ DEVICE_FRAME_FORMAT = "RGB"
 
 class VideoTransform(BaseTransform, FrameProcessingMixin, FrameBatchProcessingMixin):
     """Base for g2g video transform elements."""
+
+    FRAME_CAPABILITIES = SYSTEM_INFERENCE_FRAME_CAPABILITIES
 
     def __init__(self):
         super().__init__()
@@ -56,6 +59,8 @@ class VideoTransform(BaseTransform, FrameProcessingMixin, FrameBatchProcessingMi
     def g2g_process_cuda(self, luma, chroma, width, height, yuv_conversion, sink):
         import torch
 
+        if not self.FRAME_CAPABILITIES.accepts_cuda:
+            raise ValueError(f"{type(self).__name__} reads only system memory")
         self.width = width
         self.height = height
         frameio.bind(sink, DEVICE_FRAME_FORMAT)

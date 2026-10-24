@@ -15,11 +15,13 @@ from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
 
 from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.frameio import mapped_frame  # noqa: E402
-from backend.gst.in_place_video_transform import ANY_VIDEO_CAPS  # noqa: E402
+from backend.gst.in_place_video_transform import (  # noqa: E402
+    caps_for_frame_capabilities,
+)
 from backend.gst.video_transform import (  # noqa: E402
-    CUDA_MEMORY_FEATURE,
     SYSTEM_MEMORY_CAPS,
 )
+from backend.video_frame import SYSTEM_READ_FRAME_CAPABILITIES  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 
@@ -32,18 +34,16 @@ def sink_template(caps):
 class BaseSink(GstBase.BaseSink):
     __gsttemplates__ = sink_template(Gst.Caps.from_string(SYSTEM_MEMORY_CAPS))
 
-    # a sink that only reads metadata leaves this False
-    READS_PIXELS = True
+    FRAME_CAPABILITIES = SYSTEM_READ_FRAME_CAPABILITIES
 
     # runs before pygobject registers the subclass and reads its templates
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if not cls.READS_PIXELS:
-            cls.__gsttemplates__ = sink_template(
-                Gst.Caps.from_string(
-                    f"{ANY_VIDEO_CAPS}({CUDA_MEMORY_FEATURE});{ANY_VIDEO_CAPS}"
-                )
-            )
+        if "FRAME_CAPABILITIES" not in cls.__dict__:
+            return
+        cls.__gsttemplates__ = sink_template(
+            caps_for_frame_capabilities(cls.FRAME_CAPABILITIES)
+        )
 
     def __init__(self):
         super().__init__()
@@ -64,7 +64,7 @@ class BaseSink(GstBase.BaseSink):
         return True
 
     def do_render(self, buf):
-        if not self.READS_PIXELS:
+        if not self.FRAME_CAPABILITIES.reads_pixels:
             return self._run(None, buf)
         with mapped_frame(
             buf, Gst.MapFlags.READ, self.width, self.height, self._bytes_per_pixel

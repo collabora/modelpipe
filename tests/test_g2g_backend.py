@@ -146,6 +146,7 @@ HOSTED_ELEMENT_MODULES = [
     "pose",
     "face",
     "tracker",
+    "anonymize",
     "football_overlay",
     "baseball_overlay",
     "overlay_counter",
@@ -495,6 +496,28 @@ def test_tracker_gives_a_box_seen_twice_one_id():
     assert labels[0] == labels[1]
     assert labels[0].startswith("player_id_")
     assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
+
+
+def test_anonymize_blacks_out_only_the_detected_region():
+    from anonymize import Anonymize
+
+    width, height = 64, 48
+    original = np.full((height, width, 4), 200, np.uint8)
+    original[..., 3] = 255
+    frame = bytearray(original.tobytes())
+    person = {"label": "person", "x": 16, "y": 12, "w": 20, "h": 18, "score": 1.0}
+    anonymizer = Anonymize()
+    anonymizer.mode = "blackout"
+    anonymizer.box_expansion = 0.0
+
+    anonymizer.g2g_process(
+        frame, width, height, "RGBA", StubMetaSink(upstream_objects=[person])
+    )
+
+    pixels = np.frombuffer(frame, np.uint8).reshape(height, width, 4)
+    assert not pixels[12:30, 16:36, :3].any()
+    assert np.array_equal(pixels[:12], original[:12])
+    assert (pixels[..., 3] == 255).all()
 
 
 def test_football_overlay_draws_a_tracked_player_in_place():
@@ -988,6 +1011,39 @@ def black_cuda_planes(height, width):
     )
     chroma = torch.full(chroma_shape, NEUTRAL_CHROMA, dtype=torch.uint8)
     return padded_luma.cuda()[:, :width], chroma.cuda()
+
+
+def test_anonymize_blacks_out_a_cuda_frame_and_returns_nv12():
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA device")
+    from anonymize import Anonymize
+    from backend.g2g.cuda_frames import nv12_to_rgb, rgb_to_nv12
+
+    width, height = 96, 72
+    original = torch.full((height, width, 3), 200, dtype=torch.uint8, device="cuda")
+    luma, chroma = rgb_to_nv12(original, BT601_LIMITED_RANGE)
+    person = {"label": "person", "x": 24, "y": 18, "w": 32, "h": 24, "score": 1.0}
+    anonymizer = Anonymize()
+    anonymizer.mode = "blackout"
+    anonymizer.box_expansion = 0.0
+
+    drawn_luma, drawn_chroma = anonymizer.g2g_process_cuda(
+        luma,
+        chroma,
+        width,
+        height,
+        BT601_LIMITED_RANGE,
+        StubMetaSink(upstream_objects=[person]),
+    )
+
+    pixels = nv12_to_rgb(drawn_luma, drawn_chroma, BT601_LIMITED_RANGE)
+    assert drawn_luma.is_cuda and drawn_chroma.is_cuda
+    assert pixels[22:38, 28:52].max() < 4
+    assert (
+        largest_difference(pixels[:12].cpu().numpy(), original[:12].cpu().numpy())
+        <= BT709_ROUND_TRIP_TOLERANCE
+    )
 
 
 def football_overlay_on_a_cuda_frame():

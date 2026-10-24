@@ -17,6 +17,7 @@ from gi.repository import Gst, GstBase  # noqa: E402
 from backend.core import FrameProcessingMixin  # noqa: E402
 from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.transform import BaseTransform  # noqa: E402
+from backend.video_frame import SYSTEM_INFERENCE_FRAME_CAPABILITIES  # noqa: E402
 
 # GST_BASE_TRANSFORM_FLOW_DROPPED, which pygobject does not expose
 FLOW_DROPPED = Gst.FlowReturn.CUSTOM_SUCCESS
@@ -28,6 +29,20 @@ VIDEO_FIELDS = (
 SYSTEM_MEMORY_CAPS = f"video/x-raw,{VIDEO_FIELDS}"
 CUDA_MEMORY_FEATURE = "memory:CUDAMemory"
 CUDA_MEMORY_CAPS = f"video/x-raw({CUDA_MEMORY_FEATURE}),{VIDEO_FIELDS}"
+
+
+def frame_caps(capabilities):
+    formats = ", ".join(capabilities.pixel_formats)
+    fields = (
+        f"format=(string){{ {formats} }},"
+        "width=(int)[1,2147483647],height=(int)[1,2147483647]"
+    )
+    system_caps = f"video/x-raw,{fields}"
+    if not capabilities.accepts_cuda:
+        return Gst.Caps.from_string(system_caps)
+    return Gst.Caps.from_string(
+        f"video/x-raw({CUDA_MEMORY_FEATURE}),{fields};{system_caps}"
+    )
 
 
 def pad_templates(caps):
@@ -58,15 +73,14 @@ class VideoTransform(BaseTransform, FrameProcessingMixin):
 
     VIDEO_CAPS = Gst.Caps.from_string(SYSTEM_MEMORY_CAPS)
     __gsttemplates__ = pad_templates(VIDEO_CAPS)
-    ACCEPTS_DEVICE_FRAMES = False
+    FRAME_CAPABILITIES = SYSTEM_INFERENCE_FRAME_CAPABILITIES
 
     # runs before pygobject registers the subclass and reads its templates
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if cls.ACCEPTS_DEVICE_FRAMES:
-            cls.__gsttemplates__ = pad_templates(
-                Gst.Caps.from_string(f"{CUDA_MEMORY_CAPS};{SYSTEM_MEMORY_CAPS}")
-            )
+        if "FRAME_CAPABILITIES" not in cls.__dict__:
+            return
+        cls.__gsttemplates__ = pad_templates(frame_caps(cls.FRAME_CAPABILITIES))
 
     def __init__(self):
         super().__init__()

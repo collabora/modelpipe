@@ -1122,6 +1122,26 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
   ! videoconvert ! mp_overlay ! videoconvert ! autovideosink sync=false
 ```
 
+### Anonymization
+
+`mp_anonymize` applies blur, pixelation or blackout to analytics detection
+boxes. `labels` selects comma-separated class names and defaults to every
+detection. `box-expansion` adds a fraction of the box size on every side and
+`edge-fade` blends the effect over that many pixels at the expanded edge.
+
+#### Blur detected faces
+
+```
+python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
+  d. ! queue ! videoconvertscale ! "video/x-raw,format=RGBA,width=640,height=480" \
+  ! mp_face model-name=buffalo_l device=cuda \
+  ! mp_anonymize mode=blur box-expansion=0.1 edge-fade=8 \
+  ! videoconvert ! autovideosink sync=false
+```
+
+The element also draws directly on `CUDAMemory`. A CUDA detector such as
+`mp_yolo` can feed it without downloading the frame.
+
 ### Optical Flow
 
 `mp_optical_flow` runs RAFT between consecutive frames.

@@ -7,6 +7,7 @@
 
 from log.global_logger import GlobalLogger
 import backend
+from backend import CUDA_INFERENCE_FRAME_CAPABILITIES
 
 CAN_REGISTER_ELEMENT = True
 try:
@@ -32,7 +33,7 @@ class Classifier(BaseClassifier):
         "Classifier",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
-    ACCEPTS_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = CUDA_INFERENCE_FRAME_CAPABILITIES
 
     def __init__(self):
         super().__init__()

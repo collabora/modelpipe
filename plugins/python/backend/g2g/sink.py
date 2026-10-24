@@ -10,12 +10,12 @@ from backend.g2g.analytics import analytics
 from backend.g2g.frameio import DEVICE_FRAME, frameio
 from backend.g2g.in_place_video_transform import DEVICE_DRAWING_FORMAT
 from backend.g2g.shims import declared_property_names
+from backend.video_frame import SYSTEM_READ_FRAME_CAPABILITIES
 from log.logger_factory import LoggerFactory
 
 
 class BaseSink:
-    # a sink that only reads metadata leaves this False
-    READS_PIXELS = True
+    FRAME_CAPABILITIES = SYSTEM_READ_FRAME_CAPABILITIES
 
     def __init__(self):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -33,7 +33,7 @@ class BaseSink:
         frameio.bind(sink, fmt)
         analytics.bind(sink)
         frame = None
-        if self.READS_PIXELS:
+        if self.FRAME_CAPABILITIES.reads_pixels:
             frame = frameio.read_frame(buf, None, width, height)
         self.render(frame, self.format, buf)
         return None
@@ -44,7 +44,7 @@ class BaseSink:
         self.format = DEVICE_DRAWING_FORMAT
         frameio.bind(sink, self.format)
         analytics.bind(sink)
-        if self.READS_PIXELS:
+        if self.FRAME_CAPABILITIES.reads_pixels:
             raise ValueError(
                 f"{type(self).__name__} reads only system memory, put "
                 "videoconvert between the decoder and it"

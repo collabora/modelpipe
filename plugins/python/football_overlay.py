@@ -10,7 +10,13 @@ import os
 import re
 
 import backend
-from backend import analytics, frameio, GObject, InPlaceVideoTransform
+from backend import (
+    analytics,
+    frameio,
+    GObject,
+    InPlaceVideoTransform,
+    CUDA_DRAW_FRAME_CAPABILITIES,
+)
 from sport_overlay_drawing import (
     OpenCVSportDrawing,
     channel_order,
@@ -18,14 +24,6 @@ from sport_overlay_drawing import (
 )
 from utils.blob_headers import ALERT_META_HEADER
 from utils.kick_detector import KickDetector
-
-if backend.BACKEND == "gst":
-    from backend.gst import Gst
-
-    OVERLAY_CAPS = Gst.Caps.from_string(
-        "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }"
-    )
-
 
 _PALETTE = [
     (239, 71, 111, 255),
@@ -101,16 +99,7 @@ class FootballOverlay(InPlaceVideoTransform):
         "Marcus Edel <marcus.edel@collabora.com>",
     )
 
-    if backend.BACKEND == "gst":
-        src_template = Gst.PadTemplate.new(
-            "src", Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS, OVERLAY_CAPS.copy()
-        )
-        sink_template = Gst.PadTemplate.new(
-            "sink", Gst.PadDirection.SINK, Gst.PadPresence.ALWAYS, OVERLAY_CAPS.copy()
-        )
-        __gsttemplates__ = (src_template, sink_template)
-
-    DRAWS_ON_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = CUDA_DRAW_FRAME_CAPABILITIES
 
     show_labels = GObject.Property(
         type=bool,

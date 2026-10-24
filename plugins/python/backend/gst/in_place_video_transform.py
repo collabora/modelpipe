@@ -17,6 +17,10 @@ from backend.gst.cuda_memory import is_cuda_buffer  # noqa: E402
 from backend.gst.errors import post_error  # noqa: E402
 from backend.gst.frameio import mapped_frame  # noqa: E402
 from backend.gst.video_transform import CUDA_MEMORY_FEATURE, pad_templates  # noqa: E402
+from backend.video_frame import (  # noqa: E402
+    ANY_PIXEL_FORMAT,
+    SYSTEM_DRAW_FRAME_CAPABILITIES,
+)
 from log.logger_factory import LoggerFactory  # noqa: E402
 
 ANY_VIDEO_CAPS = "video/x-raw"
@@ -34,33 +38,37 @@ def with_cuda_memory(system_caps):
     return caps
 
 
+def caps_for_frame_capabilities(capabilities):
+    if capabilities.pixel_formats == (ANY_PIXEL_FORMAT,):
+        system_caps = Gst.Caps.from_string(ANY_VIDEO_CAPS)
+    else:
+        formats = ", ".join(capabilities.pixel_formats)
+        system_caps = Gst.Caps.from_string(
+            f"video/x-raw, format=(string){{ {formats} }}"
+        )
+    return with_cuda_memory(system_caps) if capabilities.accepts_cuda else system_caps
+
+
 class InPlaceVideoTransform(GstBase.BaseTransform):
     VIDEO_CAPS = Gst.Caps.from_string(ANY_VIDEO_CAPS)
     __gsttemplates__ = pad_templates(VIDEO_CAPS)
 
-    # an element that only reads and writes metadata leaves this False
-    READS_PIXELS = True
-    # process_in_place then also gets a cuda frame as a torch tensor
-    DRAWS_ON_DEVICE_FRAMES = False
+    FRAME_CAPABILITIES = SYSTEM_DRAW_FRAME_CAPABILITIES
 
     # runs before pygobject registers the subclass and reads its templates
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if not cls.READS_PIXELS:
-            cls.__gsttemplates__ = pad_templates(
-                Gst.Caps.from_string(
-                    f"{ANY_VIDEO_CAPS}({CUDA_MEMORY_FEATURE});{ANY_VIDEO_CAPS}"
-                )
-            )
-        elif cls.DRAWS_ON_DEVICE_FRAMES:
-            system_caps = cls.__gsttemplates__[0].get_caps()
-            cls.__gsttemplates__ = pad_templates(with_cuda_memory(system_caps))
+        if "FRAME_CAPABILITIES" not in cls.__dict__:
+            return
+        cls.__gsttemplates__ = pad_templates(
+            caps_for_frame_capabilities(cls.FRAME_CAPABILITIES)
+        )
 
     def __init__(self):
         super().__init__()
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.set_in_place(True)
-        self.set_passthrough(not self.READS_PIXELS)
+        self.set_passthrough(not self.FRAME_CAPABILITIES.reads_pixels)
         self.width = 0
         self.height = 0
         self.format = None
@@ -75,9 +83,9 @@ class InPlaceVideoTransform(GstBase.BaseTransform):
         return True
 
     def do_transform_ip(self, buf):
-        if not self.READS_PIXELS:
+        if not self.FRAME_CAPABILITIES.reads_pixels:
             return self._run(None, buf)
-        if self.DRAWS_ON_DEVICE_FRAMES and is_cuda_buffer(buf):
+        if self.FRAME_CAPABILITIES.accepts_cuda and is_cuda_buffer(buf):
             return self._run_on_device_frame(buf)
         with mapped_frame(
             buf, Gst.MapFlags.WRITE, self.width, self.height, self._bytes_per_pixel

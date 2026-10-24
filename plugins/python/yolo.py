@@ -6,7 +6,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 from log.global_logger import GlobalLogger
-from backend import GObject
+from backend import GObject, CUDA_INFERENCE_FRAME_CAPABILITIES
 import backend
 
 CAN_REGISTER_ELEMENT = True
@@ -36,7 +36,7 @@ class YOLOTransform(BaseObjectDetector, YoloTask):
         "Performs object detection, segmentation, and tracking using YOLO on video frames",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
-    ACCEPTS_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = CUDA_INFERENCE_FRAME_CAPABILITIES
 
     imgsz = GObject.Property(
         type=int,

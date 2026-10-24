@@ -22,6 +22,16 @@ the same names (reusing `backend.core.MLEngineMixin` and implementing
 from backend.analytics import AnalyticsBackend  # noqa: F401  (re-exported)
 from backend.frameio import FrameIO  # noqa: F401  (re-exported)
 from backend.core import MLEngineMixin  # noqa: F401  (re-exported)
+from backend.video_frame import (  # noqa: F401  (re-exported)
+    VideoFrameCapabilities,
+    SYSTEM_INFERENCE_FRAME_CAPABILITIES,
+    CUDA_INFERENCE_FRAME_CAPABILITIES,
+    SYSTEM_READ_FRAME_CAPABILITIES,
+    SYSTEM_DRAW_FRAME_CAPABILITIES,
+    CUDA_DRAW_FRAME_CAPABILITIES,
+    CUDA_RGBA_DRAW_FRAME_CAPABILITIES,
+    METADATA_FRAME_CAPABILITIES,
+)
 
 from utils.selected_backend import BACKEND
 
@@ -91,4 +101,12 @@ __all__ = [
     "AnalyticsBackend",
     "FrameIO",
     "MLEngineMixin",
+    "VideoFrameCapabilities",
+    "SYSTEM_INFERENCE_FRAME_CAPABILITIES",
+    "CUDA_INFERENCE_FRAME_CAPABILITIES",
+    "SYSTEM_READ_FRAME_CAPABILITIES",
+    "SYSTEM_DRAW_FRAME_CAPABILITIES",
+    "CUDA_DRAW_FRAME_CAPABILITIES",
+    "CUDA_RGBA_DRAW_FRAME_CAPABILITIES",
+    "METADATA_FRAME_CAPABILITIES",
 ]

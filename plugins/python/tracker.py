@@ -8,7 +8,12 @@
 import re
 
 import backend
-from backend import analytics, GObject, InPlaceVideoTransform
+from backend import (
+    analytics,
+    GObject,
+    InPlaceVideoTransform,
+    METADATA_FRAME_CAPABILITIES,
+)
 
 # a detector with track=true and this element both label tracked boxes this way
 TRACKED_LABEL = re.compile(r"_id_\d+$")
@@ -374,7 +379,7 @@ class TrackerTransform(InPlaceVideoTransform):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    READS_PIXELS = False
+    FRAME_CAPABILITIES = METADATA_FRAME_CAPABILITIES
 
     tracker_type = GObject.Property(
         type=str,

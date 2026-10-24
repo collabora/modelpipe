@@ -11,6 +11,7 @@ from backend.g2g.analytics import analytics
 from backend.g2g.cuda_frames import rgb_to_nv12, rgba_device_frame
 from backend.g2g.frameio import DEVICE_FRAME, frameio
 from backend.g2g.shims import declared_property_names
+from backend.video_frame import SYSTEM_DRAW_FRAME_CAPABILITIES
 from log.logger_factory import LoggerFactory
 
 DEVICE_DRAWING_FORMAT = "RGBA"
@@ -18,10 +19,7 @@ COLOUR_CHANNEL_COUNT = 3
 
 
 class InPlaceVideoTransform:
-    # an element that only reads and writes metadata leaves this False
-    READS_PIXELS = True
-    # process_in_place then also gets a cuda frame as a torch tensor
-    DRAWS_ON_DEVICE_FRAMES = False
+    FRAME_CAPABILITIES = SYSTEM_DRAW_FRAME_CAPABILITIES
 
     def __init__(self):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
@@ -39,7 +37,7 @@ class InPlaceVideoTransform:
         frameio.bind(sink, fmt)
         analytics.bind(sink)
         frame = None
-        if self.READS_PIXELS:
+        if self.FRAME_CAPABILITIES.reads_pixels:
             frame = frameio.read_frame(buf, None, width, height)
         self.process_in_place(frame, self.format, buf)
         return None
@@ -52,10 +50,10 @@ class InPlaceVideoTransform:
         self.format = DEVICE_DRAWING_FORMAT
         frameio.bind(sink, self.format)
         analytics.bind(sink)
-        if not self.READS_PIXELS:
+        if not self.FRAME_CAPABILITIES.reads_pixels:
             self.process_in_place(None, self.format, DEVICE_FRAME)
             return None
-        if not self.DRAWS_ON_DEVICE_FRAMES:
+        if not self.FRAME_CAPABILITIES.accepts_cuda:
             raise ValueError(
                 f"{type(self).__name__} draws only on system memory, put "
                 "videoconvert between the decoder and it"

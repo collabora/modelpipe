@@ -42,7 +42,7 @@ class SuperResTransform(VideoTransform, SuperResTask):
         "Image super-resolution using Real-ESRGAN",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
-    ACCEPTS_DEVICE_FRAMES = True
+    FRAME_CAPABILITIES = backend.CUDA_INFERENCE_FRAME_CAPABILITIES
 
     def __init__(self):
         super().__init__()

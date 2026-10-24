@@ -8,7 +8,7 @@
 import json
 
 import backend
-from backend import BaseSink, GObject, analytics
+from backend import BaseSink, GObject, analytics, METADATA_FRAME_CAPABILITIES
 from utils.analytics_utils import AnalyticsUtils
 
 
@@ -22,7 +22,7 @@ class KafkaSink(BaseSink):
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    READS_PIXELS = False
+    FRAME_CAPABILITIES = METADATA_FRAME_CAPABILITIES
 
     broker = GObject.Property(
         type=str, default=None, nick="Kafka Broker", blurb="Address of the Kafka broker"
