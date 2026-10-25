@@ -73,7 +73,7 @@ Gst.Element.register(None, "metareplaytagger", Gst.Rank.NONE, TagOneFrame)
 
 
 def read_lines(path):
-    return [json.loads(line) for line in path.read_text().splitlines()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
 def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
@@ -84,7 +84,7 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
             "! metareplaytagger "
-            f"! mp_metasink location={records}"
+            f"! mp_metasink location={records.as_posix()}"
         )
     )
     recorded = [line for line in read_lines(records) if line["detections"]]
@@ -94,9 +94,9 @@ def test_replayed_records_alert_at_the_recorded_timestamp(tmp_path):
     run_to_eos(
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
-            f"! mp_metareplay location={records} "
+            f"! mp_metareplay location={records.as_posix()} "
             '! mp_alert rules={"class":"thing"} draw-alert=false '
-            f"! mp_metasink location={replayed}"
+            f"! mp_metasink location={replayed.as_posix()}"
         )
     )
     lines = [line for line in read_lines(replayed) if line["detections"]]
@@ -117,8 +117,8 @@ def test_a_blob_record_comes_back_as_the_same_blob(tmp_path):
     run_to_eos(
         Gst.parse_launch(
             f"videotestsrc num-buffers={FRAMES} ! {CAPS} "
-            f"! mp_metareplay location={records} "
-            f"! mp_metasink location={replayed}"
+            f"! mp_metareplay location={records.as_posix()} "
+            f"! mp_metasink location={replayed.as_posix()}"
         )
     )
     lines = [line for line in read_lines(replayed) if "caption" in line]

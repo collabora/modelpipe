@@ -14,7 +14,7 @@ from engine.support_matrix import (  # noqa: E402
 
 
 def test_readme_carries_the_generated_table():
-    readme = (BASE_DIR / "README.md").read_text()
+    readme = (BASE_DIR / "README.md").read_text(encoding="utf-8")
     start = readme.index(README_TABLE_START) + len(README_TABLE_START)
     end = readme.index(README_TABLE_END)
     assert readme[start:end].strip() == markdown_table()

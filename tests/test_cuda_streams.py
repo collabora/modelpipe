@@ -70,6 +70,7 @@ def cuda_classifier(property_order):
     element.set_property("engine-name", "pytorch")
     for name, value in property_order:
         element.set_property(name, value)
+    element.initialize_engine()
     return element
 
 

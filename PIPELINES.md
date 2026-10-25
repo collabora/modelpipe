@@ -14,7 +14,8 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert 
 ```
 
 `mp_overlay` draws with Cairo. `mp_overlay renderer=skia` draws with Skia
-instead, from the `skia` extra.
+instead, from the `skia` extra. On Windows Skia is the default, Cairo is not
+installed there.
 
 ### Choosing the backend
 

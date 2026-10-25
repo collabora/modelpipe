@@ -459,7 +459,7 @@ def load_metadata(path: str) -> dict:
         raise ToolError(f"no metadata file at {path!r}")
     stop_pipeline()
     session.__init__()
-    with open(path) as lines:
+    with open(path, encoding="utf-8") as lines:
         for line in lines:
             if not line.strip():
                 continue

@@ -94,7 +94,9 @@ class MetaSink(GstBase.BaseSink):
         self._media_type = None
 
     def do_start(self):
-        self._output = open(self.location, "a") if self.location else sys.stdout
+        self._output = (
+            open(self.location, "a", encoding="utf-8") if self.location else sys.stdout
+        )
         return True
 
     def do_stop(self):

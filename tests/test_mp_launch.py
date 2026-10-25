@@ -718,7 +718,7 @@ def filled(tokens, directory):
 
     `str.replace` rather than `str.format`: a rules table is full of braces.
     """
-    return [token.replace("{directory}", str(directory)) for token in tokens]
+    return [token.replace("{directory}", directory.as_posix()) for token in tokens]
 
 
 def test_the_native_element_and_the_names_it_renames_to_still_exist(shells, tmp_path):
@@ -726,7 +726,7 @@ def test_the_native_element_and_the_names_it_renames_to_still_exist(shells, tmp_
     and `G2G_RAW_VIDEO_FORMAT` states what those elements negotiate. Nothing here
     notices when any of the three changes there, so run each one and see."""
     (tmp_path / "records.jsonl").write_text(json.dumps(METADATA_RECORD) + "\n")
-    (tmp_path / "cues.srt").write_text(SUBTITLE_CUE)
+    (tmp_path / "cues.srt").write_text(SUBTITLE_CUE, encoding="utf-8")
 
     for element, native in mp_launch.NATIVE_EQUIVALENTS.items():
         properties, source, tail = NATIVE_PROBES[element]

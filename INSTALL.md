@@ -59,8 +59,8 @@ pip install "gstreamer-meta[cli]"
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ```
 
-4. Install the package with the extras you need. Cairo is not installed on
-   Windows, so add `skia` for `mp_overlay` on frames in system memory:
+4. Install the package with the extras you need. `mp_overlay` draws with Skia
+   on Windows, so add `skia`:
 
 ```powershell
 pip install -e ".[yolo,skia]"

@@ -1,4 +1,5 @@
 import json
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -225,8 +226,8 @@ def test_a_child_result_is_the_last_stdout_line():
 
 
 def test_a_crashed_child_becomes_an_error_note():
-    killed = completed_child(-9)
-    assert benchmark.child_result(killed) == {"error": "killed by SIGKILL"}
+    killed = completed_child(-signal.SIGTERM)
+    assert benchmark.child_result(killed) == {"error": "killed by SIGTERM"}
     traceback = "Traceback (most recent call last):\nValueError: no graph\n"
     failed = completed_child(1, "noise\n", traceback)
     assert benchmark.child_result(failed) == {

@@ -1237,7 +1237,7 @@ def test_kafkasink_sends_the_upstream_detections_and_flushes_at_eos(monkeypatch)
         },
     ]
     message = json.loads(value)
-    schema = json.loads(KAFKA_MESSAGE_SCHEMA.read_text())
+    schema = json.loads(KAFKA_MESSAGE_SCHEMA.read_text(encoding="utf-8"))
     detection_schema = schema["properties"]["detections"]["items"]
     assert set(schema["required"]) <= message.keys()
     assert isinstance(message["timestamp"], str)

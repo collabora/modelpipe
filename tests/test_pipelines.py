@@ -6,6 +6,7 @@ import re
 import sys
 import pytest
 from pathlib import Path
+import shlex
 import shutil
 import socket
 import uuid
@@ -39,7 +40,8 @@ BACKEND = os.environ.get("MP_BACKEND", "gst").lower()
 
 # The launcher the PIPELINES.md examples name. Runs from a tmp dir, so it is spelled
 # absolute here.
-LAUNCHER = f"python {BASE_DIR / 'mp-launch.py'}"
+LAUNCHER = f"python {(BASE_DIR / 'mp-launch.py').as_posix()}"
+WINDOWS = sys.platform == "win32"
 
 # small models on the cpu, no display or microphone
 HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
@@ -280,6 +282,12 @@ def end_process_group(process):
     `shell=True` makes the shell the direct child, so signalling the process
     alone leaves the launcher and its window behind.
     """
+    if WINDOWS:
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True
+        )
+        process.wait()
+        return
     try:
         group = os.getpgid(process.pid)
     except ProcessLookupError:
@@ -302,7 +310,9 @@ def absolutize_project_inputs(pipeline):
     def rewrite(match):
         key, value = match.group(1), match.group(2)
         candidate = BASE_DIR / value.strip('"')
-        return f"{key}={candidate}" if candidate.is_file() else match.group(0)
+        return (
+            f"{key}={candidate.as_posix()}" if candidate.is_file() else match.group(0)
+        )
 
     return re.sub(r"([\w-]+)=([^\s!]+)", rewrite, pipeline)
 
@@ -318,7 +328,8 @@ def test_pipeline(pipeline, tmp_path):
     """
     skip_without_default_audio_source(pipeline)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    os.sync()
+    if not WINDOWS:
+        os.sync()
     pipeline = absolutize_project_inputs(pipeline)
     skip_without_engine_or_exported_model(pipeline)
     skip_without_onnx_provider(pipeline)
@@ -375,14 +386,17 @@ def test_pipeline(pipeline, tmp_path):
             # launcher's parent, so killing the group is what stops the run.
             # Terminating the shell alone leaves the launcher holding a window
             # and the GPU until the machine is rebooted.
+            if WINDOWS:
+                # cmd.exe does not read the posix shell syntax PIPELINES.md uses
+                launch = {"args": shlex.split(pipeline.replace("\\\n", " "))}
+            else:
+                launch = {"args": pipeline, "shell": True, "start_new_session": True}
             process = subprocess.Popen(
-                pipeline,
-                shell=True,
+                **launch,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 cwd=tmp_path,
                 env=env,
-                start_new_session=True,
             )
             process.wait(timeout=PIPELINE_TIMEOUT)
             return_code = process.returncode
@@ -402,7 +416,7 @@ def test_pipeline(pipeline, tmp_path):
     # Check logs for errors
     if not log_file.exists():
         pytest.fail(f"Log file {log_file} was not created. Full pipeline: {pipeline}")
-    with open(log_file, "r") as log:
+    with open(log_file, "r", encoding="utf-8", errors="replace") as log:
         log_content = log.read()
     failures = [m.group(0) for p in FATAL_LOG_PATTERNS for m in p.finditer(log_content)]
     if failures:

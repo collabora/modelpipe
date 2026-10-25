@@ -218,7 +218,7 @@ def element_shells(directory=None):
     registered = []
     declarations = {}
     for path in sorted((directory or plugin_dir()).glob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         constants = string_constants(tree)
         declarations.update(caps_declarations(tree))
         for node in ast.walk(tree):

@@ -5,6 +5,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import sys
 from abc import ABC, abstractmethod
 from enum import Enum
 
@@ -174,7 +175,8 @@ class GraphicsType(Enum):
     TORCH = "torch"
 
 
-DEFAULT_RENDERER = "cairo"
+# pycairo is not installed on windows
+DEFAULT_RENDERER = "skia" if sys.platform == "win32" else "cairo"
 GRAPHICS_TYPE_BY_RENDERER = {
     "cairo": GraphicsType.CAIRO,
     "skia": GraphicsType.SKIA,

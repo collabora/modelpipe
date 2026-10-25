@@ -38,7 +38,7 @@ NON_BLOB_KEYS = ("pts", "text", "detections")
 
 def read_records(path):
     records = {}
-    with open(path) as lines:
+    with open(path, encoding="utf-8") as lines:
         for line in lines:
             line = line.strip()
             if not line:

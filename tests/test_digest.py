@@ -51,7 +51,7 @@ def test_a_digest_holds_one_record_per_window(tmp_path):
     pipeline = Gst.parse_launch(
         "appsrc name=source format=time caps=text/x-raw,format=utf8 "
         f"! mp_digest window-seconds={WINDOW_SECONDS} "
-        f"! mp_metasink location={records}"
+        f"! mp_metasink location={records.as_posix()}"
     )
     source = pipeline.get_by_name("source")
     pipeline.set_state(Gst.State.PLAYING)
@@ -62,7 +62,9 @@ def test_a_digest_holds_one_record_per_window(tmp_path):
     source.emit("end-of-stream")
     run_to_eos(pipeline)
 
-    lines = [json.loads(line) for line in records.read_text().splitlines()]
+    lines = [
+        json.loads(line) for line in records.read_text(encoding="utf-8").splitlines()
+    ]
     assert [line["pts"] for line in lines] == [0.0, 1.2, 2.4]
     assert lines[0]["text"] == (
         "At 0.0s: a player runs\n"

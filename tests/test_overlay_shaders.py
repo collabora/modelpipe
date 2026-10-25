@@ -34,7 +34,7 @@ def embedded_source(spirv):
 
 @pytest.mark.parametrize("source_name", ["overlay.vert", "overlay.frag"])
 def test_shipped_spirv_was_compiled_from_the_shader_source(source_name):
-    source = (SHADER_DIRECTORY / source_name).read_text()
+    source = (SHADER_DIRECTORY / source_name).read_text(encoding="utf-8")
     spirv = (SHADER_DIRECTORY / f"{source_name}.spv").read_bytes()
 
     assert embedded_source(spirv).endswith(source)

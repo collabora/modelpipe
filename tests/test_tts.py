@@ -82,6 +82,7 @@ def test_generated_speech_is_mono_float32(element):
 
 
 def test_generated_speech_survives_soundfile(element):
+    pytest.importorskip("soundfile")
     audio = asyncio.run(element.process_transcript(TRANSCRIPT))
 
     assert audio is not None, "soundfile rejected what do_generate_speech returned"

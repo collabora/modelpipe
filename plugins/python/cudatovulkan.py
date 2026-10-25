@@ -18,8 +18,10 @@ try:
     gi.require_version("Gst", "1.0")
     gi.require_version("GstBase", "1.0")
     gi.require_version("GstVideo", "1.0")
+    from gi.repository import Gst, GstBase, GstVideo  # noqa: E402
+
     gi.require_version("GstVulkan", "1.0")
-    from gi.repository import Gst, GstBase, GstVideo, GstVulkan  # noqa: E402
+    from gi.repository import GstVulkan  # noqa: E402
 
     from backend import post_error
     from backend.cuda_driver import call_cuda_driver, current_cuda_context

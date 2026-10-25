@@ -1793,7 +1793,7 @@ pip install <span class="str">"gstreamer-meta[cli]"</span>
 pip install torch torchvision torchaudio `
   --index-url https://download.pytorch.org/whl/cu130
 
-<span class="cmt"># Install modelpipe. Cairo is not installed on Windows, skia draws the overlay</span>
+<span class="cmt"># Install modelpipe. mp_overlay draws with skia on Windows</span>
 pip install -e <span class="str">".[yolo,skia]"</span>
 
 <span class="cmt"># The wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH</span>

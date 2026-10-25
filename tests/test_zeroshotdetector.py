@@ -81,7 +81,7 @@ def test_the_element_names_detections_after_the_label_text(tmp_path):
         f"! video/x-raw,width={FRAME_SIZE},height={FRAME_SIZE},"
         f"framerate={FRAMERATE}/1,format=RGBA "
         f"! mp_zeroshotdetector device=cpu labels=ball confidence={CONFIDENCE} "
-        f"! mp_metasink location={records}"
+        f"! mp_metasink location={records.as_posix()}"
     )
     pipeline.set_state(Gst.State.PLAYING)
     message = pipeline.get_bus().timed_pop_filtered(
@@ -93,7 +93,9 @@ def test_the_element_names_detections_after_the_label_text(tmp_path):
         error, debug = message.parse_error()
         pytest.fail(f"{error.message}\n{debug}")
 
-    lines = [json.loads(line) for line in records.read_text().splitlines()]
+    lines = [
+        json.loads(line) for line in records.read_text(encoding="utf-8").splitlines()
+    ]
     detections = [detection for line in lines for detection in line["detections"]]
     assert len(lines) == FRAMES
     assert detections

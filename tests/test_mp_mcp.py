@@ -69,7 +69,7 @@ class StubVlmEngine:
 def video_file(tmp_path):
     path = tmp_path / "source.webm"
     pipeline = Gst.parse_launch(
-        CLIP_SOURCE_PIPELINE.format(frames=CLIP_SOURCE_FRAMES, path=path)
+        CLIP_SOURCE_PIPELINE.format(frames=CLIP_SOURCE_FRAMES, path=path.as_posix())
     )
     pipeline.set_state(Gst.State.PLAYING)
     pipeline.get_bus().timed_pop_filtered(
@@ -81,9 +81,9 @@ def video_file(tmp_path):
 
 def test_text_flows_from_the_sink_to_latest_metadata(tmp_path):
     text = tmp_path / "hello.txt"
-    text.write_text("hello")
+    text.write_text("hello", encoding="utf-8")
     mp_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
+        f"filesrc location={text.as_posix()} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     waited = mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     assert [record["text"] for record in waited["records"]] == ["hello"]
@@ -108,7 +108,9 @@ def test_element_messages_from_any_element_reach_latest_bus_messages():
 
 def test_an_error_keeps_the_reason_gstreamer_gave(tmp_path):
     with pytest.raises(ToolError, match="No such file"):
-        mp_mcp.start_pipeline(f"filesrc location={tmp_path / 'missing'} ! fakesink")
+        mp_mcp.start_pipeline(
+            f"filesrc location={(tmp_path / 'missing').as_posix()} ! fakesink"
+        )
 
 
 def test_a_sink_dropping_late_frames_reports_qos():
@@ -179,7 +181,7 @@ def test_element_latencies_ranks_elements_slowest_first_without_queues():
 
 def test_buffer_flow_counts_a_pad_decodebin_adds(video_file):
     mp_mcp.start_pipeline(
-        f"filesrc location={video_file} ! decodebin name=decoder ! fakesink"
+        f"filesrc location={video_file.as_posix()} ! decodebin name=decoder ! fakesink"
     )
     mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     flows = mp_mcp.buffer_flow()
@@ -200,9 +202,9 @@ def test_snapshot_frame_returns_a_jpeg_of_the_newest_frame():
 
 def test_snapshot_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
-    text.write_text("hello")
+    text.write_text("hello", encoding="utf-8")
     mp_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
+        f"filesrc location={text.as_posix()} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError):
@@ -297,9 +299,9 @@ def test_describe_frame_drops_the_padding_at_the_end_of_a_row(monkeypatch):
 
 def test_describe_frame_refuses_a_sink_that_carries_no_video(tmp_path):
     text = tmp_path / "hello.txt"
-    text.write_text("hello")
+    text.write_text("hello", encoding="utf-8")
     mp_mcp.start_pipeline(
-        f"filesrc location={text} ! text/x-raw,format=utf8 ! mp_metasink"
+        f"filesrc location={text.as_posix()} ! text/x-raw,format=utf8 ! mp_metasink"
     )
     mp_mcp.wait_for_records(1, timeout=RECORD_WAIT_SECONDS)
     with pytest.raises(ToolError, match="is not carrying video"):
@@ -332,7 +334,9 @@ def test_clip_at_names_the_video_it_cannot_find(tmp_path):
 
 def test_load_metadata_stands_in_for_a_finished_run(tmp_path):
     recorded = tmp_path / "records.jsonl"
-    recorded.write_text('{"pts": 0.0, "text": "one"}\n\n{"pts": 0.1, "text": "two"}\n')
+    recorded.write_text(
+        '{"pts": 0.0, "text": "one"}\n\n{"pts": 0.1, "text": "two"}\n', encoding="utf-8"
+    )
     assert mp_mcp.load_metadata(str(recorded)) == {"records": 2}
     assert [record["text"] for record in mp_mcp.latest_metadata()] == ["one", "two"]
     assert mp_mcp.pipeline_status() == {"state": "none"}

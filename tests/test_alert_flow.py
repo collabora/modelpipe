@@ -81,13 +81,15 @@ def test_alert_records_a_clip_and_the_sink_reports_it(tmp_path):
         f"! video/x-raw,width=64,height=48,framerate={FRAMERATE}/1,format=RGBA "
         "! tagoneframe "
         '! mp_alert rules={"class":"thing"} draw-alert=false '
-        f"! mp_alertrecorder location={clip_pattern} "
+        f"! mp_alertrecorder location={clip_pattern.as_posix()} "
         f"seconds-before={CLIP_SECONDS} seconds-after={CLIP_SECONDS} "
-        f"! mp_metasink location={records}"
+        f"! mp_metasink location={records.as_posix()}"
     )
     run_to_eos(pipeline)
 
-    lines = [json.loads(line) for line in records.read_text().splitlines()]
+    lines = [
+        json.loads(line) for line in records.read_text(encoding="utf-8").splitlines()
+    ]
     alerted = [line for line in lines if "alert" in line]
     assert len(alerted) == 1
     assert alerted[0]["pts"] == pytest.approx(ALERT_FRAME / FRAMERATE)
@@ -104,7 +106,7 @@ def test_alert_records_a_clip_and_the_sink_reports_it(tmp_path):
 def count_decoded_frames(path):
     decoded = []
     pipeline = Gst.parse_launch(
-        f"filesrc location={path} ! matroskademux ! vp8dec "
+        f"filesrc location={path.as_posix()} ! matroskademux ! vp8dec "
         "! fakesink name=out signal-handoffs=true"
     )
     pipeline.get_by_name("out").connect(

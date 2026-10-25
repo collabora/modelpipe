@@ -33,7 +33,7 @@ def load_metadata(meta_path, logger):
         return {}
 
     try:
-        with open(meta_path, "r") as f:
+        with open(meta_path, "r", encoding="utf-8") as f:
             all_data = json.load(f)
             frame_data = all_data.get("frames", [])
             # Store metadata indexed by frame_index

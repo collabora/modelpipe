@@ -26,7 +26,7 @@ def preceding_heading(headings, position):
 
 
 def pipelines_by_section(doc_path):
-    content = Path(doc_path).read_text()
+    content = Path(doc_path).read_text(encoding="utf-8")
     headings = [
         (match.start(), match.group(1).strip())
         for match in HEADING_PATTERN.finditer(content)

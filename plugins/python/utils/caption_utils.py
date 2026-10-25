@@ -29,7 +29,7 @@ def load_captions(caption_path, logger):
         return {}
 
     try:
-        with open(caption_path, "r") as f:
+        with open(caption_path, "r", encoding="utf-8") as f:
             all_data = json.load(f)
             frame_data = all_data.get("frames", [])
             # Store captions indexed by frame_index

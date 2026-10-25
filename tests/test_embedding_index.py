@@ -135,7 +135,7 @@ def test_the_sink_stores_one_row_per_embedded_frame(tmp_path):
         f"videotestsrc num-buffers={FRAMES} "
         f"! video/x-raw,width=64,height=48,framerate={FRAMERATE}/1,format=RGBA "
         "! appendembedding "
-        f"! mp_embeddingsink location={location} "
+        f"! mp_embeddingsink location={location.as_posix()} "
         f"source-id={SOURCE_ID} model-name={MODEL_NAME}"
     )
     run_to_eos(pipeline)
