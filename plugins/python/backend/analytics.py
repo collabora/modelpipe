@@ -70,5 +70,10 @@ class AnalyticsBackend(ABC):
     @abstractmethod
     def read_objects(self, meta):
         """Read back the object detections held by `meta`. Returns a list of
-        dicts with keys: ``label`` (str), ``x``, ``y``, ``w``, ``h``, ``score``.
-        Only present (valid-location) detections are returned."""
+        dicts with keys: ``label`` (str), ``x``, ``y``, ``w``, ``h``, ``score``,
+        ``track_id`` (the related tracking id, or None) and ``ref`` (what
+        `track_object` takes). Only present (valid-location) detections are
+        returned."""
+
+    @abstractmethod
+    def track_object(self, meta, obj, track_id): ...

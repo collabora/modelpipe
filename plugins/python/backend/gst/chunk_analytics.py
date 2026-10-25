@@ -124,4 +124,20 @@ class ChunkAnalytics(AnalyticsBackend):
         return True
 
     def read_objects(self, meta):
-        return [{field: obj[field] for field in OBJECT_FIELDS} for obj in meta.objects]
+        track_of_entry = {entry["id"]: entry["track_id"] for entry in meta.tracking}
+        track_of_object = {
+            src: track_of_entry[dst]
+            for src, dst in meta.relations
+            if dst in track_of_entry
+        }
+        return [
+            {
+                **{field: obj[field] for field in OBJECT_FIELDS},
+                "track_id": track_of_object.get(obj["id"]),
+                "ref": ChunkEntry(obj["id"]),
+            }
+            for obj in meta.objects
+        ]
+
+    def track_object(self, meta, obj, track_id):
+        self.relate(meta, obj["ref"], self.add_tracking(meta, track_id))

@@ -5,7 +5,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import re
 
 import backend
 from backend import (
@@ -14,9 +13,6 @@ from backend import (
     InPlaceVideoTransform,
     METADATA_FRAME_CAPABILITIES,
 )
-
-# a detector with track=true and this element both label tracked boxes this way
-TRACKED_LABEL = re.compile(r"_id_\d+$")
 
 
 def covered_fraction(boxes, by):
@@ -60,12 +56,14 @@ class KalmanBoxTracker:
         self.hits = 1
         self.age = 0
         self.time_since_update = 0
+        self.matched_detection = None
 
     def predict(self):
         """Advance state by one frame using constant velocity model."""
         self.state[:4] += self.state[4:]
         self.age += 1
         self.time_since_update += 1
+        self.matched_detection = None
         return self._get_bbox()
 
     def update(self, bbox):
@@ -244,6 +242,7 @@ class SortTracker:
                 di, ti = det_idxs[r], trk_idxs[c]
                 self.trackers[ti].update(detections[di][:4])
                 self.trackers[ti].label_quark = detections[di][5]
+                self.trackers[ti].matched_detection = detections[di]
                 matches.append((di, ti))
         return matches
 
@@ -298,7 +297,8 @@ class SortTracker:
             detections: list of [x, y, w, h, score, label_quark] arrays
 
         Returns:
-            list of (track_id, bbox, label_quark) for confirmed tracks
+            list of (track_id, bbox, label_quark, matched detection or None)
+            for confirmed tracks
         """
         import numpy as np
 
@@ -354,6 +354,7 @@ class SortTracker:
                     continue
                 trk = KalmanBoxTracker(detections[d_idx][:4])
                 trk.label_quark = detections[d_idx][5]
+                trk.matched_detection = detections[d_idx]
                 self.trackers.append(trk)
 
         # Remove dead tracks, then drop duplicate tracks sitting on one object.
@@ -367,7 +368,9 @@ class SortTracker:
         results = []
         for trk in self.trackers:
             if trk.hits >= self.min_hits and trk.time_since_update <= self.keep_alive:
-                results.append((trk.id, trk.get_bbox(), trk.label_quark))
+                results.append(
+                    (trk.id, trk.get_bbox(), trk.label_quark, trk.matched_detection)
+                )
         return results
 
 
@@ -531,14 +534,22 @@ class TrackerTransform(InPlaceVideoTransform):
 
         for obj in analytics.read_objects(meta):
             detections.append(
-                [obj["x"], obj["y"], obj["w"], obj["h"], obj["score"], obj["label"]]
+                [
+                    obj["x"],
+                    obj["y"],
+                    obj["w"],
+                    obj["h"],
+                    obj["score"],
+                    obj["label"],
+                    obj,
+                ]
             )
         return detections
 
     def process_in_place(self, frame, fmt, buf):
         tracker = self._ensure_tracker()
         detections = self._read_detections(buf)
-        if detections and all(TRACKED_LABEL.search(label) for *_, label in detections):
+        if detections and all(row[6]["track_id"] is not None for row in detections):
             if not self._passing_tracked_through:
                 self.logger.warning(
                     "detections arrive with track ids, mp_tracker passes them through"
@@ -549,14 +560,17 @@ class TrackerTransform(InPlaceVideoTransform):
         tracked = tracker.update(detections)
         if not tracked:
             return
-        meta = analytics.add_relation_meta(buf)
+        meta = analytics.get_relation_meta(buf) or analytics.add_relation_meta(buf)
         if not meta:
             raise RuntimeError("failed to add analytics relation metadata")
-        for track_id, bbox, label in tracked:
+        for track_id, bbox, label, matched in tracked:
+            if matched is not None:
+                analytics.track_object(meta, matched[6], track_id)
+                continue
+            # a track that missed its detection this frame shows its predicted box
             x, y, w, h = bbox
-            analytics.add_object(
-                meta, f"{label}_id_{track_id}", int(x), int(y), int(w), int(h), 1.0
-            )
+            box = analytics.add_object(meta, label, int(x), int(y), int(w), int(h), 1.0)
+            analytics.relate(meta, box, analytics.add_tracking(meta, track_id))
         self.logger.info(
             f"Tracker: {len(detections)} detections -> {len(tracked)} confirmed tracks"
         )

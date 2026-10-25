@@ -31,7 +31,7 @@ def detection(x, y, score=0.9, w=BOX_W, h=BOX_H):
 def ids_over_frames(tracker, frames):
     ids = set()
     for detections in frames:
-        for track_id, _box, _label in tracker.update(detections):
+        for track_id, _box, _label, _matched in tracker.update(detections):
             ids.add(track_id)
     return ids
 
@@ -66,16 +66,18 @@ def test_two_separate_players_get_two_ids():
     assert len(ids_over_frames(SortTracker(), frames)) == 2
 
 
-def tracked_labels(element, labels):
+def tracked_objects(element, boxes, track_ids=()):
     from backend import analytics
 
     buffer = Gst.Buffer.new_allocate(None, 4, None)
     meta = analytics.add_relation_meta(buffer)
-    for index, label in enumerate(labels):
-        analytics.add_object(meta, label, 10 * index, 10, BOX_W, BOX_H, 0.9)
+    for index, x in enumerate(boxes):
+        box = analytics.add_object(meta, LABEL, x, 10, BOX_W, BOX_H, 0.9)
+        if index < len(track_ids):
+            analytics.relate(meta, box, analytics.add_tracking(meta, track_ids[index]))
     element.process_in_place(None, "RGBA", buffer)
     return [
-        obj["label"]
+        (obj["x"], obj["track_id"])
         for obj in analytics.read_objects(analytics.get_relation_meta(buffer))
     ]
 
@@ -84,19 +86,27 @@ def test_detections_that_carry_track_ids_pass_through_untouched():
     from tracker import TrackerTransform
 
     element = TrackerTransform()
-    labels = ["stream_0_id_4", "stream_0_person_id_9"]
     for _ in range(element.min_hits + 1):
-        after = tracked_labels(element, labels)
-    assert after == labels
+        after = tracked_objects(element, [10, 200], track_ids=[4, 9])
+    assert after == [(10, 4), (200, 9)]
 
 
-def test_untracked_detections_still_get_tracked():
+def test_a_confirmed_track_tags_its_detection_instead_of_adding_a_box():
     from tracker import TrackerTransform
 
     element = TrackerTransform()
-    labels = [f"stream_0_{LABEL}"]
     # a track is confirmed after min-hits frames
     for _ in range(element.min_hits):
-        after = tracked_labels(element, labels)
-    assert len(after) == len(labels) + 1
-    assert after[-1].startswith(f"stream_0_{LABEL}_id_")
+        after = tracked_objects(element, [10])
+    assert len(after) == 1
+    assert after[0][1] is not None
+
+
+def test_a_track_that_misses_its_detection_shows_its_predicted_box():
+    from tracker import TrackerTransform
+
+    element = TrackerTransform()
+    for _ in range(element.min_hits):
+        confirmed = tracked_objects(element, [10])
+    missed = tracked_objects(element, [])
+    assert [track_id for _x, track_id in missed] == [confirmed[0][1]]

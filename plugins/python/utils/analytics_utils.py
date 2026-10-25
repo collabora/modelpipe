@@ -64,6 +64,8 @@ class AnalyticsUtils:
 
             # Standard object detection metadata
             track_id, label = self.extract_id_from_label(full_label)
+            if obj["track_id"] is not None:
+                track_id = obj["track_id"]
             x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
             metadata.append(
                 {
@@ -77,8 +79,9 @@ class AnalyticsUtils:
         return metadata
 
     def extract_id_from_label(self, full_label):
+        core = re.sub(r"^stream_\d+_", "", full_label)
         # Handle named tracking format: stream_\d+_<name>_id_\d+
-        match = re.match(r"stream_\d+_(.+)_id_(\d+)", full_label)
+        match = re.match(r"(.+)_id_(\d+)", core)
         if match:
             track_id = int(match.group(2))
             label = match.group(1)
@@ -88,7 +91,7 @@ class AnalyticsUtils:
             return track_id, label
 
         # Fallback to simpler tracking format: stream_\d+_id_\d+
-        match = re.match(r"stream_\d+_id_(\d+)", full_label)
+        match = re.match(r"id_(\d+)", core)
         if match:
             track_id = int(match.group(1))
             label = f"id_{track_id}"
@@ -107,5 +110,7 @@ class AnalyticsUtils:
             )
             return None, label
 
-        self.logger.info(f"No recognizable format in label '{full_label}', using as-is")
+        self.logger.debug(
+            f"No recognizable format in label '{full_label}', using as-is"
+        )
         return None, full_label

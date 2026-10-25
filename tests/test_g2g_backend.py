@@ -68,7 +68,7 @@ class StubMetaSink:
         self._objects = list(upstream_objects)
         self._blobs = dict(upstream_blobs or {})
         self._class_names = list(upstream_class_names)
-        self._tracking_ids = list(upstream_tracking_ids)
+        self._tracking_ids = list(upstream_tracking_ids) or [None] * len(self._objects)
 
     def objects(self):
         return list(self._objects)
@@ -109,6 +109,9 @@ class StubMetaSink:
     def relate(self, src, dst):
         self.relations.append((src, dst))
 
+    def track_upstream(self, index, object_id):
+        self._stage(("upstream_tracking", index, object_id))
+
     def _of_kind(self, kind):
         return [record[1:] for record in self.staged if record[0] == kind]
 
@@ -119,6 +122,10 @@ class StubMetaSink:
     @property
     def staged_blobs(self):
         return self._of_kind("blob")
+
+    @property
+    def staged_upstream_tracking(self):
+        return self._of_kind("upstream_tracking")
 
 
 #: What the shadowed `gi` raises, so a warning naming it means something wanted it.
@@ -409,7 +416,9 @@ def test_the_frames_upstream_detections_read_back():
 
     meta = analytics.get_relation_meta(None)
     assert meta is not None, "the frame arrived carrying detections"
-    assert analytics.read_objects(meta) == UPSTREAM_OBJECTS
+    assert analytics.read_objects(meta) == [
+        {**UPSTREAM_OBJECTS[0], "track_id": None, "ref": 0}
+    ]
 
 
 def test_a_frame_with_no_metadata_at_all_has_no_relation_meta():
@@ -492,10 +501,10 @@ def test_tracker_gives_a_box_seen_twice_one_id():
     for sink in sinks:
         tracker.g2g_process(bytearray(width * height * 4), width, height, "RGBA", sink)
 
-    labels = [sink.staged_class_names[sink.staged_objects[0][0]] for sink in sinks]
-    assert labels[0] == labels[1]
-    assert labels[0].startswith("player_id_")
-    assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
+    tagged = [sink.staged_upstream_tracking for sink in sinks]
+    assert tagged[0] == tagged[1]
+    assert [index for index, _id in tagged[1]] == [0]
+    assert sinks[1].staged_objects == []
 
 
 def test_anonymize_blacks_out_only_the_detected_region():
@@ -1112,9 +1121,8 @@ def test_tracker_on_a_cuda_frame_tracks_and_leaves_the_frame_alone():
     ]
 
     assert returned == [None, None]
-    label = sinks[1].staged_class_names[sinks[1].staged_objects[0][0]]
-    assert label.startswith("player_id_")
-    assert sinks[1].staged_objects[0][1:5] == (10.0, 10.0, 8.0, 16.0)
+    assert [index for index, _id in sinks[1].staged_upstream_tracking] == [0]
+    assert sinks[1].staged_objects == []
 
 
 SAMPLE_METADATA = PLUGIN_DIR.parent.parent / "data" / "sample_metadata.json"

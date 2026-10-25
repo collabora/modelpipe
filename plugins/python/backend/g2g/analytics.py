@@ -162,9 +162,18 @@ class G2gAnalyticsBackend(AnalyticsBackend):
         return True
 
     def read_objects(self, meta):
-        # The frame's incoming detections, already in the dict shape the
-        # interface states. What this element stages is not read back.
-        return meta.sink.objects() if meta else []
+        # The frame's incoming detections. What this element stages is not read back.
+        if not meta:
+            return []
+        objects = meta.sink.objects()
+        for index, (obj, track_id) in enumerate(zip(objects, meta.sink.tracking_ids())):
+            obj["track_id"] = track_id
+            obj["ref"] = index
+        return objects
+
+    def track_object(self, meta, obj, track_id):
+        meta.count += 1
+        meta.sink.track_upstream(obj["ref"], int(track_id))
 
 
 #: Defined here, like `frameio`, to avoid a circular import through `backend`.

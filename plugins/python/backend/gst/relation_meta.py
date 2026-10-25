@@ -70,6 +70,11 @@ class RelationMetaAnalytics(AnalyticsBackend):
     def read_objects(self, meta):
         objects = []
         count = GstAnalytics.relation_get_length(meta)
+        tracks = []
+        for index in range(count):
+            ret, tracking_mtd = meta.get_tracking_mtd(index)
+            if ret:
+                tracks.append(tracking_mtd)
         for index in range(count):
             ret, od_mtd = meta.get_od_mtd(index)
             if not ret or od_mtd is None:
@@ -79,6 +84,29 @@ class RelationMetaAnalytics(AnalyticsBackend):
             if not presence:
                 continue
             objects.append(
-                {"label": label, "x": x, "y": y, "w": w, "h": h, "score": score}
+                {
+                    "label": label,
+                    "x": x,
+                    "y": y,
+                    "w": w,
+                    "h": h,
+                    "score": score,
+                    "track_id": related_track_id(meta, od_mtd, tracks),
+                    "ref": od_mtd,
+                }
             )
         return objects
+
+    def track_object(self, meta, obj, track_id):
+        self.relate(meta, obj["ref"], self.add_tracking(meta, track_id))
+
+
+# get_direct_related prints a PyGObject warning per call, so the relation is tested pairwise
+def related_track_id(meta, od_mtd, tracks):
+    for tracking_mtd in tracks:
+        if (
+            meta.get_relation(od_mtd.id, tracking_mtd.id)
+            & GstAnalytics.RelTypes.RELATE_TO
+        ):
+            return tracking_mtd.get_info()[1]
+    return None
