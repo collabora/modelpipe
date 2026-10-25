@@ -22,6 +22,18 @@ uvx black plugins/ tests/ utils/
 
 CI enforces these on every PR.
 
+## Shaders
+
+The Vulkan overlay ships the SPIR-V next to its GLSL source in
+`plugins/python/overlay_helper/shaders/`. After editing a shader, recompile it
+with the source embedded, which `tests/test_overlay_shaders.py` checks:
+
+```bash
+cd plugins/python/overlay_helper/shaders
+glslc -g overlay.vert -o overlay.vert.spv
+glslc -g overlay.frag -o overlay.frag.spv
+```
+
 ## Adding a New Plugin
 
 All GStreamer Python elements live in `plugins/python/`. To add a new element:

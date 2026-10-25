@@ -47,11 +47,10 @@ except ImportError as e:
 
 
 def is_vulkan_memory(memory):
-    return GstVulkan is not None and GstVulkan.is_vulkan_memory(memory)
+    return GstVulkan is not None and GstVulkan.is_vulkan_image_memory(memory)
 
 
-# Support CPU, CUDA, and OpenGL buffers
-VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:CUDAMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }"
+VIDEO_FORMATS = "video/x-raw, format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:CUDAMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:GLMemory), format=(string){ RGBA, ARGB, BGRA, ABGR }; video/x-raw(memory:VulkanImage), format=(string){ RGBA, BGRA }"
 # Building a Gst object needs Gst.init, which only the gst backend calls.
 if backend.BACKEND == "gst":
     OVERLAY_CAPS = Gst.Caps.from_string(VIDEO_FORMATS)
@@ -126,8 +125,6 @@ class Overlay(GstBase.BaseTransform):
         self.overlay_graphics = None
         self.graphics_type = None
         self.gl_context = None
-        self.vk_device = None
-        self.vk_queue = None
         self.use_opengl = False
         self.use_vulkan = False
         self.gl_display = None
@@ -169,22 +166,6 @@ class Overlay(GstBase.BaseTransform):
                         self.logger.warning(
                             "Failed to get GL display from NEED_CONTEXT: gl_display is None"
                         )
-                elif context_type == "gst.vulkan.device":
-                    self.vk_device = context.get_vulkan_device()
-                    if self.vk_device:
-                        self.logger.info(
-                            "Successfully acquired Vulkan device from NEED_CONTEXT"
-                        )
-                        self.vk_queue = self.vk_device.get_queue(
-                            0
-                        )  # Get the first queue
-                        self.use_vulkan = True
-                        self.context_set = True
-                        self.context_received = True
-                    else:
-                        self.logger.warning(
-                            "Failed to get Vulkan device from NEED_CONTEXT: vk_device is None"
-                        )
                 else:
                     self.logger.warning(f"Unknown context type: {context_type}")
             else:
@@ -200,42 +181,24 @@ class Overlay(GstBase.BaseTransform):
         else:
             self.logger.error("Could not get the bus from the pipeline.")
 
-        # Try to get the Vulkan or OpenGL context early
         self.logger.info("Attempting to get graphics context in do_start")
-        # Try Vulkan first
-        context = self.get_context("gst.vulkan.device")
+        context = self.get_context("gst.gl.app_context")
         if context:
-            self.logger.info("Found existing Vulkan context in do_start")
-            self.vk_device = context.get_vulkan_device()
-            if self.vk_device:
-                self.logger.info("Successfully acquired Vulkan device in do_start")
-                self.vk_queue = self.vk_device.get_queue(0)  # Get the first queue
-                self.use_vulkan = True
+            self.logger.info("Found existing OpenGL context in do_start")
+            self.gl_context = context.get_gl_context()
+            if self.gl_context:
+                self.logger.info("Successfully acquired OpenGL context in do_start")
+                self.use_opengl = True
                 self.context_set = True
                 self.context_received = True
             else:
                 self.logger.warning(
-                    "Failed to get Vulkan device in do_start: vk_device is None"
+                    "Failed to get OpenGL context in do_start: gl_context is None"
                 )
         else:
-            self.logger.warning("No Vulkan context found in do_start, trying OpenGL")
-            context = self.get_context("gst.gl.app_context")
-            if context:
-                self.logger.info("Found existing OpenGL context in do_start")
-                self.gl_context = context.get_gl_context()
-                if self.gl_context:
-                    self.logger.info("Successfully acquired OpenGL context in do_start")
-                    self.use_opengl = True
-                    self.context_set = True
-                    self.context_received = True
-                else:
-                    self.logger.warning(
-                        "Failed to get OpenGL context in do_start: gl_context is None"
-                    )
-            else:
-                self.logger.warning(
-                    "No OpenGL context found in do_start, will wait for NEED_CONTEXT message"
-                )
+            self.logger.warning(
+                "No OpenGL context found in do_start, will wait for NEED_CONTEXT message"
+            )
 
         return True
 
@@ -245,9 +208,8 @@ class Overlay(GstBase.BaseTransform):
         self.video_format = video_info.finfo.name
         self.logger.info(f"Video caps set: width={self.width}, height={self.height}")
 
-        # Check if the input caps are using GLMemory or VulkanMemory
         self.use_opengl = "memory:GLMemory" in incaps.to_string()
-        self.use_vulkan = "memory:VulkanMemory" in incaps.to_string()
+        self.use_vulkan = "memory:VulkanImage" in incaps.to_string()
         self.logger.info(
             f"Using OpenGL: {self.use_opengl}, Using Vulkan: {self.use_vulkan}"
         )
@@ -302,7 +264,6 @@ class Overlay(GstBase.BaseTransform):
                 f"Initializing graphics backend. use_opengl={self.use_opengl}, use_vulkan={self.use_vulkan}"
             )
 
-            # Check if the buffer's memory is GLMemory or VulkanMemory
             is_gl_buffer = False
             is_vulkan_buffer = False
             if buf.n_memory() > 0:
@@ -321,27 +282,6 @@ class Overlay(GstBase.BaseTransform):
                 self.graphics_type = GraphicsType.TORCH
             elif self.use_vulkan and is_vulkan_buffer:
                 self.graphics_type = GraphicsType.VULKAN
-                # Try to get the Vulkan context if not already set
-                if not self.vk_device:
-                    context = self.get_context("gst.vulkan.device")
-                    if context:
-                        self.vk_device = context.get_vulkan_device()
-                        if self.vk_device:
-                            self.logger.info("Successfully acquired Vulkan device")
-                            self.vk_queue = self.vk_device.get_queue(0)
-                            self.context_set = True
-                        else:
-                            self.logger.warning(
-                                "Failed to get Vulkan device: vk_device is None"
-                            )
-                            self.use_vulkan = False
-                            self.graphics_type = GraphicsType.CAIRO
-                    else:
-                        self.logger.warning(
-                            "No Vulkan context found, falling back to Cairo"
-                        )
-                        self.use_vulkan = False
-                        self.graphics_type = GraphicsType.CAIRO
             elif self.use_opengl and is_gl_buffer:
                 self.graphics_type = GraphicsType.OPENGL
                 # Try to get the OpenGL context if not already set
@@ -372,22 +312,29 @@ class Overlay(GstBase.BaseTransform):
 
             # Create the graphics backend
             kwargs = {}
-            if self.graphics_type == GraphicsType.VULKAN:
-                kwargs["vk_device"] = self.vk_device
-                kwargs["vk_queue"] = self.vk_queue
-            elif self.graphics_type in (GraphicsType.SKIA, GraphicsType.TORCH):
+            if self.graphics_type in (
+                GraphicsType.SKIA,
+                GraphicsType.TORCH,
+                GraphicsType.VULKAN,
+            ):
                 kwargs["video_format"] = self.video_format
-            self.overlay_graphics = OverlayGraphicsFactory.create(
-                self.graphics_type, self.width, self.height, **kwargs
-            )
+            try:
+                if self.graphics_type == GraphicsType.VULKAN:
+                    kwargs["vulkan_queue"] = self.upstream_vulkan_queue()
+                self.overlay_graphics = OverlayGraphicsFactory.create(
+                    self.graphics_type, self.width, self.height, **kwargs
+                )
+            except Exception as exception:
+                post_error(
+                    self, f"{self.graphics_type.value} renderer setup failed", exception
+                )
+                return Gst.FlowReturn.ERROR
             self.logger.info(f"Drawing with the {self.graphics_type.value} renderer")
 
         # Handle rendering based on the graphics type
         if self.graphics_type == GraphicsType.VULKAN:
             if not is_vulkan_memory(buf.peek_memory(0)):
-                self.logger.error(
-                    "Buffer is not in VulkanMemory, cannot proceed with Vulkan overlay"
-                )
+                self.logger.error("Buffer is not in VulkanImage memory")
                 return Gst.FlowReturn.ERROR
 
             try:
@@ -447,6 +394,16 @@ class Overlay(GstBase.BaseTransform):
 
         self.frame_counter += 1
         return Gst.FlowReturn.OK
+
+    def upstream_vulkan_queue(self):
+        query = GstVulkan.vulkan_local_context_query(
+            self, GstVulkan.VULKAN_QUEUE_CONTEXT_TYPE_STR
+        )
+        if query is None:
+            raise RuntimeError("no upstream element shares a Vulkan queue")
+        # 1.24 introspection gives context_get_vulkan_queue no out argument
+        structure = query.parse_context().get_structure()
+        return structure.get_value(GstVulkan.VULKAN_QUEUE_CONTEXT_TYPE_STR)
 
     def draw_in_place(self, buf, frame_metadata):
         try:

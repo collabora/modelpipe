@@ -5,6 +5,22 @@ tracked in that repo's `design/TODO.md`, not here.
 
 ## GPU effects and device paths
 
+- **Feed `mp_overlay` from the Vulkan decoders.** `vulkanh264dec !
+  vulkancolorconvert` crashes on GStreamer 1.26 and 1.28 (upstream #4623). The
+  decoder emits NV12 as one multi-planar image, and `calculate_reorder_indexes`
+  reads a view for each plane. The upstream fix is per-plane views of that
+  image. Until then, decoded frames reach `mp_overlay` only through
+  `vulkandownload`.
+
+- **Sync `mp_cudatovulkan` on the GPU.** It waits on the host for each copy
+  with `cuStreamSynchronize`. Export a Vulkan semaphore to CUDA and signal it
+  after the copy instead.
+
+- **Route `mp_overlay` to the GPU overlay on glass2glass.** `mp-launch` maps
+  `mp_overlay` to `analyticsoverlay`. For a CUDA decode, emit `cudatowgpu !
+  wgpucolorconvert ! vellooverlay` instead, once glass2glass registers those
+  elements for launch lines.
+
 - **Finish `mp_anonymize` validation on a CUDA host.** Run the GStreamer and
   glass2glass CUDA tests and the documented detector pipeline under both
   backends. Do not describe the face pipeline as fully GPU-resident while
@@ -21,12 +37,3 @@ tracked in that repo's `design/TODO.md`, not here.
   downloads, and explicit stream synchronizations for every video link. Refuse
   an unsupported path instead of inserting an implicit download. Keep
   scheduling in GStreamer and glass2glass.
-
-- **Replace the incomplete Vulkan overlay with packaged shader assets.** Stop
-  advertising `VulkanMemory` until an integration test proves that pixels are
-  drawn. Evaluate Slang against direct SPIR-V and the available GStreamer shader
-  elements before adding a dependency. If Slang is selected, keep the source in
-  the repository, compile and validate SPIR-V during the build, ship the same
-  binary tested in CI, and add DXIL only with a tested D3D12 memory path. Reuse
-  the shader layer for anonymization and overlay drawing. Runtime user shaders
-  and a shader editor are outside the first implementation.

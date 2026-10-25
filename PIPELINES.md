@@ -123,6 +123,20 @@ ignores the `renderer` property and draws boxes, labels, tracking squares and
 trails without antialiasing, with Pillow's default font. `cudadownload` drops
 the analytics metadata, so it goes after the last element that reads it.
 
+`mp_overlay` also draws on `video/x-raw(memory:VulkanImage)` RGBA and BGRA
+frames, with shaders on the Vulkan device. `mp_cudatovulkan` copies CUDA frames
+into Vulkan images on the same GPU, device to device, so a CUDA detector feeds
+the Vulkan overlay without a copy to the host. It gives its Vulkan device to
+the Vulkan elements after it, the device of the GPU that CUDA device 0 is on,
+and a frame on another CUDA device fails. The element exists on the gst backend
+only. The example downloads the frames to show them in `gtkwaylandsink`, a
+resizable window. `vulkansink` opens a 320x240 window on Wayland, and shrinking
+the frame that far drops the 2 pixel box edges.
+
+```
+python mp-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA,width=1280,height=720" ! mp_yolo model-name=yolo11n engine-name=pytorch device=cuda ! mp_tracker ! mp_cudatovulkan ! mp_overlay ! vulkandownload ! videoconvert ! gtkwaylandsink
+```
+
 `mp_depth` takes CUDA memory with `engine-name=pytorch device=cuda` too: the
 image processor resizes and normalises the frame on the GPU and the colormap
 frame is written back into the CUDA buffer, with only the uint8 depth blob

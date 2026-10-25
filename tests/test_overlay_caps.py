@@ -13,10 +13,12 @@ from gi.repository import Gst  # noqa: E402
 Gst.init(None)
 
 
-def test_overlay_does_not_advertise_the_incomplete_vulkan_renderer():
+def test_overlay_advertises_vulkan_image_memory():
     from overlay import VIDEO_FORMATS
 
-    assert "VulkanMemory" not in VIDEO_FORMATS
+    assert "video/x-raw(memory:VulkanImage), format=(string){ RGBA, BGRA }" in (
+        VIDEO_FORMATS
+    )
 
 
 def test_anonymizer_advertises_rgba_system_and_cuda_frames():

@@ -170,7 +170,7 @@ class GraphicsType(Enum):
     CAIRO = "cairo"
     SKIA = "skia"
     OPENGL = "opengl"
-    VULKAN = "vulkan"  # Add Vulkan as a graphics type
+    VULKAN = "vulkan"
     TORCH = "torch"
 
 
@@ -204,8 +204,8 @@ class OverlayGraphicsFactory:
         elif graphics_type == GraphicsType.VULKAN:
             from .overlay_vulkan import VulkanOverlayGraphics
 
-            vk_device = kwargs.get("vk_device")
-            vk_queue = kwargs.get("vk_queue")
-            return VulkanOverlayGraphics(width, height, vk_device, vk_queue)
+            return VulkanOverlayGraphics(
+                width, height, kwargs["video_format"], kwargs["vulkan_queue"]
+            )
         else:
             raise ValueError(f"Unknown graphics type: {graphics_type}")

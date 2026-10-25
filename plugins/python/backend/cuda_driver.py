@@ -22,6 +22,24 @@ CUDA_DRIVER_SIGNATURES = {
     "cuGetErrorName": [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)],
     "cuDeviceGet": [ctypes.POINTER(ctypes.c_int), ctypes.c_int],
     "cuDevicePrimaryCtxRetain": [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int],
+    "cuInit": [ctypes.c_uint],
+    "cuCtxGetDevice": [ctypes.POINTER(ctypes.c_int)],
+    "cuDeviceGetUuid_v2": [ctypes.c_char_p, ctypes.c_int],
+    "cuStreamSynchronize": [ctypes.c_void_p],
+    "cuImportExternalMemory": [ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p],
+    "cuDestroyExternalMemory": [ctypes.c_void_p],
+    "cuExternalMemoryGetMappedMipmappedArray": [
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ],
+    "cuMipmappedArrayGetLevel": [
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_uint,
+    ],
+    "cuMipmappedArrayDestroy": [ctypes.c_void_p],
+    "cuMemcpy2DAsync_v2": [ctypes.c_void_p, ctypes.c_void_p],
 }
 
 
