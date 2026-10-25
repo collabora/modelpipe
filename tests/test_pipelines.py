@@ -40,7 +40,11 @@ BACKEND = os.environ.get("MP_BACKEND", "gst").lower()
 
 # The launcher the PIPELINES.md examples name. Runs from a tmp dir, so it is spelled
 # absolute here.
-LAUNCHER = f"python {(BASE_DIR / 'mp-launch.py').as_posix()}"
+# on windows a bare `python` finds the base interpreter beside the venv's launcher
+LAUNCHER = (
+    f"{shlex.quote(Path(sys.executable).as_posix())} "
+    f"{shlex.quote((BASE_DIR / 'mp-launch.py').as_posix())}"
+)
 WINDOWS = sys.platform == "win32"
 
 # small models on the cpu, no display or microphone
