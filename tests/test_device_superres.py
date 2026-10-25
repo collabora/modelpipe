@@ -45,7 +45,7 @@ def superres_buffers():
 
     Gst.Element.register(None, "superresundertest", Gst.Rank.NONE, SuperResTransform)
     return pull_tee_buffers(
-        f"filesrc location={PORTRAIT} ! jpegdec ! videoconvert ! videoscale "
+        f"filesrc location={PORTRAIT.as_posix()} ! jpegdec ! videoconvert ! videoscale "
         f"! video/x-raw,format=RGBA,width={WIDTH},height={HEIGHT}",
         f"! superresundertest model-name={SUPERRES_MODEL} engine-name=pytorch "
         "device=cuda ",

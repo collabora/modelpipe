@@ -146,7 +146,7 @@ def depth_buffers():
 
     Gst.Element.register(None, "depthundertest", Gst.Rank.NONE, DepthTransform)
     return pull_tee_buffers(
-        f"filesrc location={PORTRAIT} ! jpegdec ! videoconvert "
+        f"filesrc location={PORTRAIT.as_posix()} ! jpegdec ! videoconvert "
         "! video/x-raw,format=RGBA",
         f"! depthundertest model-name={DEPTH_MODEL} engine-name=pytorch "
         "device=cuda ",

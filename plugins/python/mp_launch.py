@@ -661,13 +661,17 @@ def launch_environment():
     return env
 
 
+# windows appends .exe only to a name without an extension, and ".0" counts as one
 def gst_command(argv):
+    gst_launch = shutil.which("gst-launch-1.0")
+    if gst_launch is None:
+        raise SystemExit("mp-launch: gst-launch-1.0 is not on PATH")
     env = launch_environment()
     if CHECKOUT_PLUGINS:
         env["GST_PLUGIN_PATH"] = _prepend_path(
             env.get("GST_PLUGIN_PATH"), CHECKOUT_PLUGINS
         )
-    return ["gst-launch-1.0", *argv], env
+    return [gst_launch, *argv], env
 
 
 def g2g_binary():

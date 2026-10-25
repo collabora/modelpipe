@@ -1789,21 +1789,23 @@ python -m venv .venv
 <span class="cmt"># Install GStreamer and its Python bindings from the GStreamer wheels</span>
 pip install <span class="str">"gstreamer-meta[cli]"</span>
 
-<span class="cmt"># Install modelpipe</span>
-pip install -e .
+<span class="cmt"># For an NVIDIA GPU, CUDA PyTorch first: PyPI's Windows torch is CPU-only</span>
+pip install torch torchvision torchaudio `
+  --index-url https://download.pytorch.org/whl/cu130
+
+<span class="cmt"># Install modelpipe. Cairo is not installed on Windows, skia draws the overlay</span>
+pip install -e <span class="str">".[yolo,skia]"</span>
 
 <span class="cmt"># The wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH</span>
 <span class="cmt"># The plugin loader embeds the base interpreter, so it needs PYTHONPATH too</span>
+<span class="cmt"># cudaconvert and cudascale load NVRTC from torch\lib</span>
 $venv = <span class="str">"$PWD\.venv"</span>
 $env:GST_PLUGIN_PATH_1_0 = <span class="str">"$PWD\plugins"</span>
 $env:PYTHONPATH = <span class="str">"$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;$PWD\plugins\python"</span>
+$env:PATH = <span class="str">"$venv\Lib\site-packages\torch\lib;$env:PATH"</span>
 
 <span class="cmt"># Check the elements load</span>
-gst-inspect-1.0 mp_objectdetector
-
-<span class="cmt"># Optional: CUDA PyTorch, after the CUDA Toolkit matching your driver</span>
-pip install torch torchvision torchaudio \
-  --index-url https://download.pytorch.org/whl/cu128</pre>
+gst-inspect-1.0 mp_objectdetector</pre>
                 </div>
                 <div class="tab-panel" id="tab-g2g">
 <pre><span class="cmt"># Set up modelpipe as in the Ubuntu or Fedora tab and keep its venv active</span>
@@ -1899,7 +1901,7 @@ gst-inspect-1.0 my_detector</pre>
             <div class="deploy-card">
                 <div class="d-icon">&#128187;</div>
                 <h3>Windows</h3>
-                <p>GStreamer and its Python bindings from the gstreamer-meta wheels, with Python 3.10 or later. CUDA GPU support via PyTorch.</p>
+                <p>GStreamer and its Python bindings from the gstreamer-meta wheels, with Python 3.10 or later. NVDEC decode, CUDA inference and the overlay on CUDA frames. No Vulkan.</p>
             </div>
             <div class="deploy-card">
                 <div class="d-icon">&#127822;</div>

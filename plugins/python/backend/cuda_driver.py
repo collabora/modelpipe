@@ -6,10 +6,11 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import ctypes
+import sys
 from contextlib import contextmanager
 from functools import cache
 
-CUDA_DRIVER_LIBRARY = "libcuda.so.1"
+CUDA_DRIVER_LIBRARY = "nvcuda.dll" if sys.platform == "win32" else "libcuda.so.1"
 
 CUDA_SUCCESS = 0
 CUDA_DRIVER_SIGNATURES = {

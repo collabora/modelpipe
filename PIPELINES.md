@@ -129,9 +129,10 @@ into Vulkan images on the same GPU, device to device, so a CUDA detector feeds
 the Vulkan overlay without a copy to the host. It gives its Vulkan device to
 the Vulkan elements after it, the device of the GPU that CUDA device 0 is on,
 and a frame on another CUDA device fails. The element exists on the gst backend
-only. The example downloads the frames to show them in `gtkwaylandsink`, a
-resizable window. `vulkansink` opens a 320x240 window on Wayland, and shrinking
-the frame that far drops the 2 pixel box edges.
+on Linux only, the Windows GStreamer packages have no Vulkan plugin. The
+example downloads the frames to show them in `gtkwaylandsink`, a resizable
+window. `vulkansink` opens a 320x240 window on Wayland, and shrinking the frame
+that far drops the 2 pixel box edges.
 
 ```
 python mp-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvh264dec ! cudaconvert ! cudascale ! capsfilter caps="video/x-raw(memory:CUDAMemory),format=RGBA,width=1280,height=720" ! mp_yolo model-name=yolo11n engine-name=pytorch device=cuda ! mp_tracker ! mp_cudatovulkan ! mp_overlay ! vulkandownload ! videoconvert ! gtkwaylandsink

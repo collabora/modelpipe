@@ -41,39 +41,57 @@ sudo dnf install -y python3-pip \
 
 1. Install Python 3.10 or later. JetPack 6 ships 3.10; the `jax` extras need 3.11.
 
-2. Install GStreamer and its Python bindings from the GStreamer project's
-   wheels, in the same venv as this package:
+2. Make a venv and install GStreamer and its Python bindings from the
+   GStreamer project's wheels. The venv's `python`, `gst-launch-1.0` and
+   `gst-inspect-1.0` find the GStreamer libraries on their own.
 
 ```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install "gstreamer-meta[cli]"
 ```
 
-   The venv's `python`, `gst-launch-1.0` and `gst-inspect-1.0` find the
-   GStreamer libraries on their own.
-
-3. Point GStreamer at the plugin directory. The wheels set
-   `GST_PLUGIN_PATH_1_0`, which hides `GST_PLUGIN_PATH`, so use that name. The
-   Python plugin loader embeds the base interpreter, not the venv, so it also
-   needs `PYTHONPATH` to find the venv packages, the bundled `gi` and the
-   plugins:
+3. For an NVIDIA GPU, install the CUDA PyTorch before the package. PyPI's
+   Windows torch is CPU-only, and once it is installed pip keeps it. The driver
+   is enough, the wheels bring the CUDA runtime.
 
 ```powershell
-$venv = "D:\Workspace\modelpipe\.venv"
-$env:GST_PLUGIN_PATH_1_0 = "D:\Workspace\modelpipe\plugins"
-$env:PYTHONPATH = "$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;D:\Workspace\modelpipe\plugins\python"
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ```
 
-4. Check the elements load:
+4. Install the package with the extras you need. Cairo is not installed on
+   Windows, so add `skia` for `mp_overlay` on frames in system memory:
+
+```powershell
+pip install -e ".[yolo,skia]"
+```
+
+5. Set the environment. The wheels set `GST_PLUGIN_PATH_1_0`, which hides
+   `GST_PLUGIN_PATH`. The Python plugin loader embeds the base interpreter, not
+   the venv, so it needs `PYTHONPATH` to find the venv packages, the bundled
+   `gi` and the plugins. `cudaconvert` and `cudascale` compile their kernels
+   with NVRTC, which torch ships in `torch\lib`:
+
+```powershell
+$venv = "$PWD\.venv"
+$env:GST_PLUGIN_PATH_1_0 = "$PWD\plugins"
+$env:PYTHONPATH = "$venv\Lib\site-packages;$venv\Lib\site-packages\gstreamer_python\Lib\site-packages;$PWD\plugins\python"
+$env:PATH = "$venv\Lib\site-packages\torch\lib;$env:PATH"
+```
+
+6. Check the elements load:
 
 ```powershell
 gst-inspect-1.0 mp_objectdetector
+gst-inspect-1.0 cudaconvert
 ```
 
-5. For CUDA, install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) matching your driver, then the CUDA PyTorch:
+   GStreamer caches the element list in `.venv\Temp\gstreamer-1.0`. If
+   `cudaconvert` is missing after `PATH` changes, delete that directory.
 
-```powershell
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-```
+The Windows GStreamer packages have no Vulkan plugin, so `mp_cudatovulkan` and
+the Vulkan overlay are Linux only. Show video with `autovideosink` or
+`d3d12videosink`.
 
 ### Manage Python packages
 

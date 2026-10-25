@@ -51,7 +51,7 @@ requires_tensorrt = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def portrait_frames():
     pipeline = Gst.parse_launch(
-        f"filesrc location={PORTRAIT} ! jpegdec ! videoconvert ! videoscale "
+        f"filesrc location={PORTRAIT.as_posix()} ! jpegdec ! videoconvert ! videoscale "
         f"! video/x-raw,format=RGBA,width={FRAME_WIDTH},height={FRAME_HEIGHT} "
         "! tee name=split "
         "split. ! queue ! cudaupload "

@@ -47,7 +47,7 @@ def pose_frames():
 
     Gst.Element.register(None, "poseundertest", Gst.Rank.NONE, YOLOPoseTransform)
     pipeline = Gst.parse_launch(
-        f"filesrc location={PORTRAIT} ! jpegdec ! videoconvert "
+        f"filesrc location={PORTRAIT.as_posix()} ! jpegdec ! videoconvert "
         "! video/x-raw,format=RGBA ! tee name=split "
         "split. ! queue ! appsink name=source_sink sync=false "
         f"split. ! queue ! cudaupload ! cudaconvert ! {DEVICE_CAPS} "

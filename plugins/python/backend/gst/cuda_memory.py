@@ -6,6 +6,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import ctypes
+import sys
 from dataclasses import dataclass
 from functools import cache
 from types import SimpleNamespace
@@ -17,8 +18,9 @@ from backend.cuda_driver import (
 )
 from utils.format_converter import packed_format_layout
 
-GSTREAMER_LIBRARY = "libgstreamer-1.0.so.0"
-GST_CUDA_LIBRARY = "libgstcuda-1.0.so.0"
+WINDOWS = sys.platform == "win32"
+GSTREAMER_LIBRARY = "gstreamer-1.0-0.dll" if WINDOWS else "libgstreamer-1.0.so.0"
+GST_CUDA_LIBRARY = "gstcuda-1.0-0.dll" if WINDOWS else "libgstcuda-1.0.so.0"
 
 GST_MAP_READ = 1
 VIDEO_MEMORY = 0
