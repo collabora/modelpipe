@@ -12,6 +12,7 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstBase", "1.0")
 from gi.repository import Gst, GObject  # noqa: E402
 from backend import analytics  # noqa: E402
+from backend.analytics import stream_label  # noqa: E402
 from log.logger_factory import LoggerFactory  # noqa: E402
 from utils.metadata import BATCH_SOURCE_INDEX_METADATA  # noqa: E402
 from collections import defaultdict  # noqa: E402
@@ -115,13 +116,11 @@ class StreamDemux(Gst.Element):
                 f"Processing {len(objects)} analytics relations for stream_{source_index}"
             )
             # elements label by batch position, not source index
-            batch_label_prefix = f"stream_{batch_position}_"
             for obj in objects:
-                label = obj["label"]
-                if batch_label_prefix in label:
+                if obj["stream"] == batch_position:
                     new_od_mtd = analytics.add_object(
                         out_meta,
-                        label.replace(batch_label_prefix, f"stream_{source_index}_", 1),
+                        stream_label(source_index, obj["label"]),
                         obj["x"],
                         obj["y"],
                         obj["w"],
@@ -129,7 +128,7 @@ class StreamDemux(Gst.Element):
                         obj["score"],
                     )
                     if new_od_mtd is None:
-                        self.logger.error(f"Failed to attach metadata: {label}")
+                        self.logger.error(f"Failed to attach metadata: {obj['label']}")
         return out_buffer
 
     def push_buffer(self, pad, buffer, pad_name):

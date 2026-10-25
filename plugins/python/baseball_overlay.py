@@ -68,14 +68,10 @@ BAT_PART_GAP = 0.25
 
 
 def parse_label(full_label):
-    core = full_label
-    match = re.match(r"stream_\d+_(.*)$", full_label)
-    if match:
-        core = match.group(1)
-    match = re.match(r"(.+)_id_(\d+)$", core)
+    match = re.match(r"(.+)_id_(\d+)$", full_label)
     if match:
         return match.group(1), int(match.group(2))
-    return core, None
+    return full_label, None
 
 
 def box_overlap(box, other):

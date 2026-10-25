@@ -99,4 +99,4 @@ def test_the_element_names_detections_after_the_label_text(tmp_path):
     detections = [detection for line in lines for detection in line["detections"]]
     assert len(lines) == FRAMES
     assert detections
-    assert all(detection["label"] == "stream_0_ball" for detection in detections)
+    assert all(detection["label"] == "ball" for detection in detections)

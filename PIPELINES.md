@@ -708,7 +708,7 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin name=d \
 `mp_zeroshotdetector` detects the classes named in its `labels` property, so
 `mp_alert`, `mp_tracker`, `mp_overlay` and `mp_metasink` work on a class
 no detector was trained for. Detections carry the label text, as
-`stream_0_handbag`.
+`handbag`.
 
 Supported models:
 ```
@@ -1399,7 +1399,7 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert 
 ```
 
 ```
-{"pts": 0.08, "detections": [{"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}], "alert": [{"timestamp": 1789611763.6, "rule": {"class": "person", "min_score": 0.7}, "detection": {"label": "stream_0_person", "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85}}]}
+{"pts": 0.08, "detections": [{"label": "person", "stream": 0, "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85, "track_id": null, "ref": 0}], "alert": [{"timestamp": 1789611763.6, "rule": {"class": "person", "min_score": 0.7}, "detection": {"label": "person", "stream": 0, "x": 469, "y": 312, "w": 37, "h": 82, "score": 0.85, "track_id": null, "ref": 0}}]}
 ```
 
 ### Metadata Replay

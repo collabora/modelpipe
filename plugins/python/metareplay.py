@@ -21,6 +21,7 @@ try:
 
     from log.logger_factory import LoggerFactory  # noqa: E402
     from backend import analytics, frameio, GObject  # noqa: E402
+    from backend.analytics import stream_label  # noqa: E402
 
     if backend.BACKEND == "gst":
         VIDEO_CAPS = Gst.Caps.from_string("video/x-raw")
@@ -124,7 +125,7 @@ class MetaReplay(GstBase.BaseTransform):
             for detection in detections:
                 analytics.add_object(
                     meta,
-                    detection["label"],
+                    stream_label(detection["stream"], detection["label"]),
                     detection["x"],
                     detection["y"],
                     detection["w"],

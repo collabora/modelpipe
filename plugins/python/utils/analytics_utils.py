@@ -23,11 +23,9 @@ class AnalyticsUtils:
     metadata added by object detection and tracking elements, such as YOLO-based transformers.
 
     Supported Label Formats:
-    - Named tracking: 'stream_<idx>_<name>_id_<id>' → label='<name>', track_id=<id>
-    - Simpler tracking: 'stream_<idx>_id_<id>' → label='id_<id>', track_id=<id>
-    - Class name (no tracking): 'stream_<idx>_<class_name>' → label='<class_name>', track_id=None
-    - Trail point: 'stream_<idx>_<name>_trail' → label='<name>_trail', track_id=None
-    - Fallback: Any other format → label='<full_label>', track_id=None
+    - Named tracking: '<name>_id_<id>' → label='<name>', track_id=<id>
+    - Simpler tracking: 'id_<id>' → label='id_<id>', track_id=<id>
+    - Any other format, such as a class name or '<name>_trail' → label='<full_label>', track_id=None
 
     The extracted metadata includes labels, track IDs, confidence scores, and bounding box coordinates.
     """
@@ -79,9 +77,7 @@ class AnalyticsUtils:
         return metadata
 
     def extract_id_from_label(self, full_label):
-        core = re.sub(r"^stream_\d+_", "", full_label)
-        # Handle named tracking format: stream_\d+_<name>_id_\d+
-        match = re.match(r"(.+)_id_(\d+)", core)
+        match = re.match(r"(.+)_id_(\d+)", full_label)
         if match:
             track_id = int(match.group(2))
             label = match.group(1)
@@ -90,8 +86,7 @@ class AnalyticsUtils:
             )
             return track_id, label
 
-        # Fallback to simpler tracking format: stream_\d+_id_\d+
-        match = re.match(r"id_(\d+)", core)
+        match = re.match(r"id_(\d+)", full_label)
         if match:
             track_id = int(match.group(1))
             label = f"id_{track_id}"
@@ -100,17 +95,4 @@ class AnalyticsUtils:
             )
             return track_id, label
 
-        # Fallback to class name format: stream_\d+_(.+)
-        match = re.match(r"stream_\d+_(.+)", full_label)
-        if match:
-            class_name = match.group(1)
-            label = class_name  # Use class name directly
-            self.logger.debug(
-                f"Extracted class label '{label}' from '{full_label}' (class name)"
-            )
-            return None, label
-
-        self.logger.debug(
-            f"No recognizable format in label '{full_label}', using as-is"
-        )
         return None, full_label

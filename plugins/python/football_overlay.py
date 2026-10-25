@@ -382,17 +382,13 @@ class FootballOverlay(InPlaceVideoTransform):
         return label
 
     def _parse_label(self, full_label):
-        core = full_label
-        m = re.match(r"stream_\d+_(.*)$", full_label)
-        if m:
-            core = m.group(1)
-        m = re.match(r"(.+)_id_(\d+)$", core)
+        m = re.match(r"(.+)_id_(\d+)$", full_label)
         if m:
             return self._map_label(m.group(1)), int(m.group(2))
-        m = re.match(r"id_(\d+)$", core)
+        m = re.match(r"id_(\d+)$", full_label)
         if m:
             return "object", int(m.group(1))
-        return self._map_label(core or "object"), None
+        return self._map_label(full_label or "object"), None
 
     def _read_metadata(self, buf):
         entries = []

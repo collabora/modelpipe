@@ -13,7 +13,7 @@ import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402
 
-from backend.analytics import AnalyticsBackend  # noqa: E402
+from backend.analytics import AnalyticsBackend, split_stream_label  # noqa: E402
 from utils.metadata import first_memory_with_prefix  # noqa: E402
 
 ANALYTICS_CHUNK_HEADER = b"GST-ANALYTICS:"
@@ -130,14 +130,19 @@ class ChunkAnalytics(AnalyticsBackend):
             for src, dst in meta.relations
             if dst in track_of_entry
         }
-        return [
-            {
-                **{field: obj[field] for field in OBJECT_FIELDS},
-                "track_id": track_of_object.get(obj["id"]),
-                "ref": ChunkEntry(obj["id"]),
-            }
-            for obj in meta.objects
-        ]
+        objects = []
+        for obj in meta.objects:
+            stream, label = split_stream_label(obj["label"])
+            objects.append(
+                {
+                    **{field: obj[field] for field in OBJECT_FIELDS},
+                    "label": label,
+                    "stream": stream,
+                    "track_id": track_of_object.get(obj["id"]),
+                    "ref": obj["id"],
+                }
+            )
+        return objects
 
     def track_object(self, meta, obj, track_id):
-        self.relate(meta, obj["ref"], self.add_tracking(meta, track_id))
+        self.relate(meta, ChunkEntry(obj["ref"]), self.add_tracking(meta, track_id))

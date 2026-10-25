@@ -18,7 +18,24 @@ callers: pass them back into the same backend (e.g. into `relate`). The read
 side (`read_objects`) returns plain dicts so consumers need no framework types.
 """
 
+import re
 from abc import ABC, abstractmethod
+
+STREAM_LABEL = re.compile(r"stream_(\d+)_(.+)$")
+
+
+# a batched element labels a detection `stream_<i>_<class>`, `i` the frame's place in the batch
+def split_stream_label(label):
+    match = STREAM_LABEL.match(label)
+    if match is None:
+        return None, label
+    return int(match.group(1)), match.group(2)
+
+
+def stream_label(stream, label):
+    if stream is None:
+        return label
+    return f"stream_{stream}_{label}"
 
 
 class AnalyticsBackend(ABC):
@@ -70,8 +87,9 @@ class AnalyticsBackend(ABC):
     @abstractmethod
     def read_objects(self, meta):
         """Read back the object detections held by `meta`. Returns a list of
-        dicts with keys: ``label`` (str), ``x``, ``y``, ``w``, ``h``, ``score``,
-        ``track_id`` (the related tracking id, or None) and ``ref`` (what
+        dicts with keys: ``label`` (str, without the ``stream_<i>_`` prefix),
+        ``stream`` (the batch position from that prefix, or None), ``x``, ``y``,
+        ``w``, ``h``, ``score``, ``track_id`` (the related tracking id, or None) and ``ref`` (what
         `track_object` takes). Only present (valid-location) detections are
         returned."""
 

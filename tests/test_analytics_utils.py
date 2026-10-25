@@ -22,11 +22,10 @@ from utils.analytics_utils import AnalyticsUtils  # noqa: E402
 @pytest.mark.parametrize(
     ("full_label", "expected"),
     [
-        ("stream_0_person_id_7", (7, "person")),
-        ("stream_1_ball_id_2", (2, "ball")),
-        ("stream_0_sports ball_id_3", (3, "sports ball")),
-        ("stream_0_id_5", (5, "id_5")),
-        ("stream_0_dog", (None, "dog")),
+        ("person_id_7", (7, "person")),
+        ("sports ball_id_3", (3, "sports ball")),
+        ("id_5", (5, "id_5")),
+        ("dog", (None, "dog")),
         ("whatever", (None, "whatever")),
     ],
 )

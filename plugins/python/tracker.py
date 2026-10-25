@@ -13,6 +13,7 @@ from backend import (
     InPlaceVideoTransform,
     METADATA_FRAME_CAPABILITIES,
 )
+from backend.analytics import stream_label
 
 
 def covered_fraction(boxes, by):
@@ -540,7 +541,7 @@ class TrackerTransform(InPlaceVideoTransform):
                     obj["w"],
                     obj["h"],
                     obj["score"],
-                    obj["label"],
+                    stream_label(obj["stream"], obj["label"]),
                     obj,
                 ]
             )

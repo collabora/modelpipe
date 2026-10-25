@@ -34,6 +34,17 @@ def add(analytics, meta, detection):
     return analytics.add_object(meta, *detection.values())
 
 
+def read_back(detection, ref, track_id=None):
+    stream, label = detection["label"].removeprefix("stream_").split("_", 1)
+    return {
+        **detection,
+        "label": label,
+        "stream": int(stream),
+        "track_id": track_id,
+        "ref": ref,
+    }
+
+
 def test_the_chunk_carries_objects_beside_another_blob_until_removed():
     analytics = ChunkAnalytics()
     buffer = Gst.Buffer.new_wrapped(bytes(VIDEO_FRAME_SIZE))
@@ -46,18 +57,19 @@ def test_the_chunk_carries_objects_beside_another_blob_until_removed():
     assert analytics.relate(meta, person, tracking)
 
     assert analytics.relation_length(meta) == 4
-    assert analytics.read_objects(meta) == [PERSON, BALL]
+    tracked_person = read_back(PERSON, person.id, track_id=7)
+    assert analytics.read_objects(meta) == [tracked_person, read_back(BALL, 1)]
     attached = analytics.get_relation_meta(buffer)
-    assert analytics.read_objects(attached) == [PERSON, BALL]
+    assert analytics.read_objects(attached) == [tracked_person, read_back(BALL, 1)]
     assert attached.relations == [[person.id, tracking.id]]
 
     frameio.append_blob(buffer, DEPTH_HEADER, DEPTH_PAYLOAD)
     add(analytics, analytics.get_relation_meta(buffer), DOG)
     assert buffer.n_memory() == 3
     assert analytics.read_objects(analytics.get_relation_meta(buffer)) == [
-        PERSON,
-        BALL,
-        DOG,
+        tracked_person,
+        read_back(BALL, 1),
+        read_back(DOG, 4),
     ]
     assert frameio.read_blobs(buffer)["depth"] == DEPTH_PAYLOAD
 
@@ -78,8 +90,8 @@ def test_a_chunk_appended_after_the_batch_metadata_is_found():
 
     assert buffer.n_memory() == 4
     assert analytics.read_objects(analytics.get_relation_meta(buffer)) == [
-        PERSON,
-        BALL,
+        read_back(PERSON, 0),
+        read_back(BALL, 1),
     ]
     assert BATCH_SOURCE_INDEX_METADATA.read(buffer) == ((0,), (1,))
 
@@ -123,7 +135,9 @@ def test_writing_the_frame_leaves_the_chunk_in_place():
 
     assert buffer.n_memory() == 2
     assert buffer.extract_dup(0, 1) == bytes([FRAME_FILL])
-    assert analytics.read_objects(analytics.get_relation_meta(buffer)) == [PERSON]
+    assert analytics.read_objects(analytics.get_relation_meta(buffer)) == [
+        read_back(PERSON, 0)
+    ]
 
 
 def test_metasink_writes_the_chunk_only_as_detections(monkeypatch):
@@ -138,6 +152,6 @@ def test_metasink_writes_the_chunk_only_as_detections(monkeypatch):
 
     assert metasink.buffer_record(buffer, "video/x-raw") == {
         "pts": 0.0,
-        "detections": [PERSON],
+        "detections": [read_back(PERSON, 0)],
         "depth": {"mean": 2.5},
     }

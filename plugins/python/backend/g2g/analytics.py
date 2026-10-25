@@ -167,6 +167,8 @@ class G2gAnalyticsBackend(AnalyticsBackend):
             return []
         objects = meta.sink.objects()
         for index, (obj, track_id) in enumerate(zip(objects, meta.sink.tracking_ids())):
+            # the host has already split the batch and dropped the prefix
+            obj["stream"] = None
             obj["track_id"] = track_id
             obj["ref"] = index
         return objects

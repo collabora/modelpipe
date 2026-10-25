@@ -12,7 +12,7 @@ gi.require_version("GstAnalytics", "1.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gst, GstAnalytics, GLib  # noqa: E402
 
-from backend.analytics import AnalyticsBackend  # noqa: E402
+from backend.analytics import AnalyticsBackend, split_stream_label  # noqa: E402
 
 
 class RelationMetaAnalytics(AnalyticsBackend):
@@ -79,26 +79,32 @@ class RelationMetaAnalytics(AnalyticsBackend):
             ret, od_mtd = meta.get_od_mtd(index)
             if not ret or od_mtd is None:
                 continue
-            label = GLib.quark_to_string(od_mtd.get_obj_type())
+            stream, label = split_stream_label(
+                GLib.quark_to_string(od_mtd.get_obj_type())
+            )
             presence, x, y, w, h, score = od_mtd.get_location()
             if not presence:
                 continue
             objects.append(
                 {
                     "label": label,
+                    "stream": stream,
                     "x": x,
                     "y": y,
                     "w": w,
                     "h": h,
                     "score": score,
                     "track_id": related_track_id(meta, od_mtd, tracks),
-                    "ref": od_mtd,
+                    "ref": od_mtd.id,
                 }
             )
         return objects
 
     def track_object(self, meta, obj, track_id):
-        self.relate(meta, obj["ref"], self.add_tracking(meta, track_id))
+        ret, od_mtd = meta.get_od_mtd(obj["ref"])
+        if not ret:
+            raise KeyError(f"no object detection with id {obj['ref']}")
+        self.relate(meta, od_mtd, self.add_tracking(meta, track_id))
 
 
 # get_direct_related prints a PyGObject warning per call, so the relation is tested pairwise

@@ -417,7 +417,7 @@ def test_the_frames_upstream_detections_read_back():
     meta = analytics.get_relation_meta(None)
     assert meta is not None, "the frame arrived carrying detections"
     assert analytics.read_objects(meta) == [
-        {**UPSTREAM_OBJECTS[0], "track_id": None, "ref": 0}
+        {**UPSTREAM_OBJECTS[0], "stream": None, "track_id": None, "ref": 0}
     ]
 
 
@@ -1196,8 +1196,8 @@ class RecordingProducer:
 
 
 KAFKA_DETECTIONS = [
-    {"label": "stream_0_person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9},
-    {"label": "stream_0_car", "x": 10, "y": 20, "w": 30, "h": 40, "score": 0.5},
+    {"label": "person", "x": 1, "y": 2, "w": 3, "h": 4, "score": 0.9},
+    {"label": "car", "x": 10, "y": 20, "w": 30, "h": 40, "score": 0.5},
 ]
 
 
