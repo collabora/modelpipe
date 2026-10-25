@@ -129,6 +129,10 @@ class StreamDemux(Gst.Element):
                     )
                     if new_od_mtd is None:
                         self.logger.error(f"Failed to attach metadata: {obj['label']}")
+                        continue
+                    if obj["track_id"] is not None:
+                        tracking = analytics.add_tracking(out_meta, obj["track_id"])
+                        analytics.relate(out_meta, new_od_mtd, tracking)
         return out_buffer
 
     def push_buffer(self, pad, buffer, pad_name):

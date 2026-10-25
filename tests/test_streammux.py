@@ -85,3 +85,25 @@ def test_each_batch_runs_later_than_the_one_before():
 
     assert len(running_times) == BATCH_COUNT
     assert running_times == sorted(set(running_times)), running_times
+
+
+def test_the_demux_keeps_each_detections_track_id():
+    from backend import analytics
+    from streamdemux import StreamDemux
+
+    buffer = Gst.Buffer.new_wrapped(bytes(16))
+    meta = analytics.add_relation_meta(buffer)
+    person = analytics.add_object(meta, "stream_0_person", 1, 2, 3, 4, 0.9)
+    analytics.relate(meta, person, analytics.add_tracking(meta, 7))
+    analytics.add_object(meta, "stream_0_car", 5, 6, 7, 8, 0.5)
+    analytics.add_object(meta, "stream_1_dog", 9, 10, 11, 12, 0.25)
+
+    out_buffer = StreamDemux().process_src_pad(
+        buffer, buffer.get_memory(0), batch_position=0, source_index=2
+    )
+
+    found = analytics.read_objects(analytics.get_relation_meta(out_buffer))
+    assert [(obj["label"], obj["stream"], obj["track_id"]) for obj in found] == [
+        ("person", 2, 7),
+        ("car", 2, None),
+    ]

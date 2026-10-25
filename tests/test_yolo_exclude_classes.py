@@ -33,7 +33,7 @@ def decoded_labels(exclude_classes):
     element.do_load_model()
     frame = cv2.cvtColor(cv2.imread(str(PORTRAIT)), cv2.COLOR_BGR2RGB)
     result = element.do_forward(frame)
-    buffer = Gst.Buffer.new()
+    buffer = Gst.Buffer.new_wrapped(frame.tobytes())
     element.do_decode(buffer, result)
     meta = analytics.get_relation_meta(buffer)
     return [found["label"] for found in analytics.read_objects(meta)]

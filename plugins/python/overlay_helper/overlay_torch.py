@@ -6,6 +6,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import math
+from typing import NamedTuple
 
 from utils.format_converter import packed_format_layout
 
@@ -27,7 +28,6 @@ from .overlay_utils_interface import (
 
 COLOUR_CHANNEL_COUNT = 3
 FULL_INTENSITY = 255
-TEXT_PIXELS_CACHE_SIZE = 256
 # a box outline is four filled slabs
 SLABS_PER_BOX = 4
 # the 2d prefix sum of these corner marks is one inside the rectangle
@@ -48,8 +48,7 @@ class TorchOverlayGraphics(OverlayGraphics):
         )
         self.reverses_colour = rgb_channels.step < 0
         self.stream = torch.cuda.Stream()
-        self.fonts = {}
-        self.text_pixels_by_label = {}
+        self.glyph_atlases = {}
         self.device_colours = {}
         self.pixels = None
 
@@ -165,24 +164,24 @@ class TorchOverlayGraphics(OverlayGraphics):
         self.draw_texts([(label, x, y)], color, font_size, 0)
 
     def draw_texts(self, labels, color, font_size, baseline_offset):
-        import numpy as np
-        import torch
-
-        pieces = []
+        if font_size not in self.glyph_atlases:
+            self.glyph_atlases[font_size] = GlyphAtlas(font_size, self.pixels.device)
+        atlas = self.glyph_atlases[font_size]
+        placed_glyphs = []
         for text, x, y in labels:
-            if not text:
-                continue
-            text_pixels, ascent = self.text_pixels(text, font_size)
-            offset = np.array([[round(y) - baseline_offset - ascent], [round(x)], [0]])
-            pieces.append(text_pixels + offset)
-        if not pieces:
+            line = round(y) - baseline_offset - atlas.ascent
+            column = x
+            for character in text:
+                glyph = atlas.glyph(character)
+                placed_glyphs.append((glyph, line, round(column)))
+                column += atlas.advances[glyph]
+        if not placed_glyphs:
             return
-        table = torch.from_numpy(np.concatenate(pieces, axis=1)).to(
-            self.pixels.device, torch.float32
+        inked = atlas.inked_pixels(placed_glyphs)
+        colours = self.device_colour(color).expand(
+            len(inked.alphas), COLOUR_CHANNEL_COUNT
         )
-        lines, columns, alphas = table
-        colours = self.device_colour(color).expand(len(alphas), COLOUR_CHANNEL_COUNT)
-        self.draw_pixels(lines.long(), columns.long(), colours, alphas)
+        self.draw_pixels(inked.lines, inked.columns, colours, inked.alphas)
 
     def draw_tracking_point(self, center, color, opacity):
         self.draw_squares(
@@ -295,29 +294,91 @@ class TorchOverlayGraphics(OverlayGraphics):
             )
         return self.device_colours[key]
 
-    def font(self, font_size):
+
+class InkedPixels(NamedTuple):
+    lines: object
+    columns: object
+    alphas: object
+
+
+class GlyphAtlas:
+    def __init__(self, font_size, device):
         from PIL import ImageFont
 
-        if font_size not in self.fonts:
-            self.fonts[font_size] = ImageFont.load_default(size=font_size)
-        return self.fonts[font_size]
+        self.font = ImageFont.load_default(size=font_size)
+        self.ascent, self.descent = self.font.getmetrics()
+        self.device = device
+        self.glyph_of_character = {}
+        self.advances = []
+        self.pixel_counts = []
+        self.glyph_tables = []
+        self.uploaded_glyph_count = 0
 
-    # rows of line, column and alpha for each inked pixel, with the font ascent
-    def text_pixels(self, text, font_size):
-        key = (text, font_size)
-        if key in self.text_pixels_by_label:
-            return self.text_pixels_by_label[key]
+    def glyph(self, character):
+        if character not in self.glyph_of_character:
+            self.glyph_of_character[character] = self.rasterize(character)
+        return self.glyph_of_character[character]
+
+    def rasterize(self, character):
         import numpy as np
         from PIL import Image, ImageDraw
 
-        font = self.font(font_size)
-        ascent, descent = font.getmetrics()
-        image = Image.new("L", (math.ceil(font.getlength(text)), ascent + descent))
-        ImageDraw.Draw(image).text((0, 0), text, fill=FULL_INTENSITY, font=font)
+        left, _, right, _ = self.font.getbbox(character)
+        image = Image.new("L", (max(right - left, 1), self.ascent + self.descent))
+        ImageDraw.Draw(image).text(
+            (-left, 0), character, fill=FULL_INTENSITY, font=self.font
+        )
         alpha = np.asarray(image)
         lines, columns = np.nonzero(alpha)
-        inked = np.stack([lines, columns, alpha[lines, columns] / FULL_INTENSITY])
-        if len(self.text_pixels_by_label) >= TEXT_PIXELS_CACHE_SIZE:
-            self.text_pixels_by_label.clear()
-        self.text_pixels_by_label[key] = (inked.astype(np.float32), ascent)
-        return self.text_pixels_by_label[key]
+        self.glyph_tables.append(
+            np.stack([lines, columns + left, alpha[lines, columns]]).astype(np.int64)
+        )
+        self.advances.append(self.font.getlength(character))
+        self.pixel_counts.append(len(lines))
+        return len(self.advances) - 1
+
+    def upload_new_glyphs(self):
+        import numpy as np
+        import torch
+
+        if self.uploaded_glyph_count == len(self.glyph_tables):
+            return
+        table = torch.from_numpy(np.concatenate(self.glyph_tables, axis=1)).to(
+            self.device
+        )
+        self.pixel_offsets = table[:2]
+        self.pixel_alphas = table[2].float() / FULL_INTENSITY
+        counts = torch.tensor(self.pixel_counts, device=self.device)
+        self.glyph_pixel_counts = counts
+        self.glyph_first_pixels = counts.cumsum(0) - counts
+        self.uploaded_glyph_count = len(self.glyph_tables)
+
+    # placed_glyphs holds (glyph, line, column) rows
+    def inked_pixels(self, placed_glyphs):
+        import numpy as np
+        import torch
+
+        self.upload_new_glyphs()
+        pixel_total = sum(self.pixel_counts[glyph] for glyph, _, _ in placed_glyphs)
+        # a list of tuples converts to a tensor far slower than through numpy
+        glyphs, line_origins, column_origins = (
+            torch.from_numpy(np.array(placed_glyphs, dtype=np.int64)).to(self.device).T
+        )
+        counts = self.glyph_pixel_counts[glyphs]
+        placement_of_pixel = torch.repeat_interleave(
+            torch.arange(len(placed_glyphs), device=self.device),
+            counts,
+            output_size=pixel_total,
+        )
+        first_output_pixel = counts.cumsum(0) - counts
+        source = (
+            self.glyph_first_pixels[glyphs][placement_of_pixel]
+            + torch.arange(pixel_total, device=self.device)
+            - first_output_pixel[placement_of_pixel]
+        )
+        lines, columns = self.pixel_offsets[:, source]
+        return InkedPixels(
+            lines=lines + line_origins[placement_of_pixel],
+            columns=columns + column_origins[placement_of_pixel],
+            alphas=self.pixel_alphas[source],
+        )
