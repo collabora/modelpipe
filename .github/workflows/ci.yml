@@ -287,15 +287,48 @@ jobs:
           # the g2g job has no gi to run its gst driver tests
           python -m pytest tests/test_g2g_backend.py -q
 
-      - name: Cache the models the tests download (Linux)
-        if: runner.os == 'Linux'
+      - name: Check GStreamer plugin discovery (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          source .venv/Scripts/activate
+          WS=$(pwd -W)
+          VENV_SITE=$(python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+          GI_SITE=$(python -c "import os; print(os.environ['GST_PYTHONPATH_1_0'])")
+          # the python plugin loader embeds the base interpreter, which sees none of the venv
+          echo "PYTHONPATH=${VENV_SITE};${GI_SITE};${WS}/plugins/python" >> $GITHUB_ENV
+          # the gstreamer wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH
+          echo "GST_PLUGIN_PATH_1_0=${WS}/plugins" >> $GITHUB_ENV
+          export PYTHONPATH="${VENV_SITE};${GI_SITE};${WS}/plugins/python"
+          export GST_PLUGIN_PATH_1_0="${WS}/plugins"
+          # the import check above cached a registry without the plugins dir
+          rm -rf .venv/Temp/gstreamer-1.0
+          gst-inspect-1.0 python
+          gst-inspect-1.0 mp_objectdetector
+
+      - name: Run gst backend tests (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          source .venv/Scripts/activate
+          # mp_overlay draws with skia on windows
+          pip install pytest -e ".[skia]"
+          rm -rf .venv/Temp/gstreamer-1.0
+          python -m pytest tests/ -q \
+            --ignore=tests/test_pipelines.py \
+            --ignore=tests/test_zeroshotdetector.py \
+            --ignore=tests/test_engines.py
+
+      - name: Cache the models the tests download
+        if: runner.os != 'macOS'
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/huggingface
             ~/.cache/torch
             ~/.config/Ultralytics
-          key: pipelines-${{ hashFiles('PIPELINES.md', 'tests/test_exported_models.py') }}
+            ~/AppData/Roaming/Ultralytics
+          key: pipelines-${{ runner.os }}-${{ hashFiles('PIPELINES.md', 'tests/test_exported_models.py') }}
 
       # the alert pipeline publishes to a local broker
       - name: Run the PIPELINES.md pipelines a headless runner can (Linux)
@@ -306,11 +339,18 @@ jobs:
           sudo apt-get install -y mosquitto
           HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=300 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
 
-      - name: Upload the pipeline logs (Linux)
-        if: runner.os == 'Linux' && failure()
+      - name: Run the PIPELINES.md pipelines a headless runner can (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          source .venv/Scripts/activate
+          HEADLESS_PIPELINES=1 PIPELINE_TIMEOUT=300 GST_DEBUG=2 python -m pytest tests/test_pipelines.py -q
+
+      - name: Upload the pipeline logs
+        if: runner.os != 'macOS' && failure()
         uses: actions/upload-artifact@v7
         with:
-          name: pipeline-logs
+          name: pipeline-logs-${{ matrix.os }}-${{ matrix.python-version }}
           path: tests/logs
 
       # the gst backend step has no onnxruntime
@@ -354,25 +394,6 @@ jobs:
           gst-launch-1.0 videotestsrc num-buffers=2 \
             ! "video/x-raw,format=RGB,width=64,height=48" \
             ! mp_metasink
-
-      - name: Check GStreamer plugin discovery (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          source .venv/Scripts/activate
-          WS=$(pwd -W)
-          VENV_SITE=$(python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
-          GI_SITE=$(python -c "import os; print(os.environ['GST_PYTHONPATH_1_0'])")
-          # the python plugin loader embeds the base interpreter, which sees none of the venv
-          echo "PYTHONPATH=${VENV_SITE};${GI_SITE};${WS}/plugins/python" >> $GITHUB_ENV
-          # the gstreamer wheels set GST_PLUGIN_PATH_1_0, which hides GST_PLUGIN_PATH
-          echo "GST_PLUGIN_PATH_1_0=${WS}/plugins" >> $GITHUB_ENV
-          export PYTHONPATH="${VENV_SITE};${GI_SITE};${WS}/plugins/python"
-          export GST_PLUGIN_PATH_1_0="${WS}/plugins"
-          # the import check above cached a registry without the plugins dir
-          rm -rf .venv/Temp/gstreamer-1.0
-          gst-inspect-1.0 python
-          gst-inspect-1.0 mp_objectdetector
 
       - name: ONNX pipeline smoke test (Windows)
         if: runner.os == 'Windows'
