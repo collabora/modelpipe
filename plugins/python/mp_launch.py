@@ -25,7 +25,8 @@
   * a sink takes no clock properties and the overlay no `wait-text`, because
     g2g never does what those switch off;
   * an element that reads frames in CUDA memory, right after `nvdec`, is hosted
-    on the decoder's NV12 frames with `cuda-frames=true`.
+    on the decoder's NV12 frames with `cuda-frames=true`, and `mp_overlay` on
+    those frames is `wgpucolorconvert ! vellooverlay`, which draws on the GPU.
 
 Everything else is named the same on both: `filesrc`, `decodebin`,
 `videoconvert`, `videoscale`, `autovideosink`. Write the pipeline the way the
@@ -104,6 +105,11 @@ NATIVE_PROPERTIES = {
 
 #: What separates two elements, on both spellings.
 SEPARATOR = "!"
+
+# show-label because mp_overlay always draws the class name on gst
+CUDA_NATIVE_EQUIVALENTS = {
+    "mp_overlay": ["wgpucolorconvert", SEPARATOR, "vellooverlay", "show-label=true"],
+}
 
 #: The property every element on both backends takes as its handle for links.
 NAME_PROPERTY = "name"
@@ -535,7 +541,10 @@ def rewrite_segment(
 
     native = NATIVE_EQUIVALENTS.get(head)
     if native:
-        return [native, *[quoted(p) for p in renamed_properties(head, properties)]]
+        renamed = [quoted(p) for p in renamed_properties(head, properties)]
+        if upstream_on_cuda and head in CUDA_NATIVE_EQUIVALENTS:
+            return [*CUDA_NATIVE_EQUIVALENTS[head], *renamed]
+        return [native, *renamed]
 
     shell = shells.get(head)
     if shell:

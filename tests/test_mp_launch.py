@@ -441,6 +441,18 @@ def test_an_element_after_one_on_cuda_frames_takes_them_too(shells):
     )
 
 
+def test_the_overlay_on_cuda_frames_draws_on_the_gpu(shells):
+    pipeline = "nvdec ! mp_yolo device=cuda ! mp_overlay tracking=true ! autovideosink"
+    assert (
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
+        == (
+            "nvdec ! pyelement module=yolo class=YOLOTransform cuda-frames=true "
+            "format=NV12 device=cuda ! wgpucolorconvert ! vellooverlay "
+            "show-label=true show-track=true ! autovideosink"
+        ).split()
+    )
+
+
 def test_a_converter_after_nvdec_keeps_the_element_on_system_memory(shells):
     pipeline = "nvdec ! videoconvert ! mp_yolo device=cuda".split()
     assert "cuda-frames=true" not in mp_launch.rewrite_for_g2g(pipeline, shells)

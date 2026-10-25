@@ -58,18 +58,28 @@ converts the NV12 frame to RGB on the GPU and runs the same device-frame path as
 on gst. The frame leaves it still CUDA NV12, so a `mp_tracker` straight after
 it takes `cuda-frames=true` too. mp-launch does this only from `nvdec` on, so
 a line with `decodebin` keeps the element on system memory, spell `qtdemux !
-h264parse ! nvdec`. g2g has no GPU scaler or RGBA conversion, so mp-launch
-drops gst's `cudaconvert`, `cudascale` and `video/x-raw(memory:CUDAMemory)` caps
-filter after `nvdec`, and the element sees the decoded size. Put `videoconvert`
-ahead of `mp_overlay`. An element that writes the frame, such as `mp_depth`
-with `visualize=true` or `mp_superres`, needs `videoconvert` between `nvdec`
-and it.
-Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
-for `nvdec`.
+h264parse ! nvdec`. g2g has no GPU scaler, so mp-launch drops gst's
+`cudaconvert`, `cudascale` and `video/x-raw(memory:CUDAMemory)` caps filter
+after `nvdec`, and the element sees the decoded size. `mp_overlay` on those
+frames becomes `wgpucolorconvert ! vellooverlay show-label=true`, which converts
+the frame to RGBA and draws the boxes and labels on the GPU, and `autovideosink`
+shows it in a window, so the frame never reaches host memory. An element that
+writes the frame, such as `mp_depth` with `visualize=true` or `mp_superres`,
+needs `videoconvert` between `nvdec` and it, and `mp_overlay` after a
+`videoconvert` is `analyticsoverlay` on the CPU.
 
-`analyticsoverlay` has its own properties (`show-label`, `show-track`,
-`show-score`, `show-trail`, `trail-length`, `thickness`, `mask-alpha`), so only
-`mp_overlay`'s `tracking` carries over, as `show-track`.
+```
+MP_BACKEND=g2g python mp-launch.py filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvdec ! mp_yolo model-name=yolo11n device=cuda ! mp_tracker ! mp_overlay tracking=true ! autovideosink
+```
+
+Build `g2g-launch-py` with `--features ml,g2g-plugins/nvdec,g2g-plugins/cuda`
+for `nvdec`, and add `g2g-plugins/cuda-wgpu,g2g-plugins/wgpu-present,g2g-plugins/vello-overlay`
+for the GPU overlay and window.
+
+`analyticsoverlay` and `vellooverlay` have their own properties (`show-label`,
+`show-track`, `show-score`, `thickness`, `mask-alpha`, and on `analyticsoverlay`
+`show-trail` and `trail-length`), so only `mp_overlay`'s `tracking` carries
+over, as `show-track`.
 
 Build `g2g-launch-py` from a glass2glass checkout and put it on `PATH`, or point
 `G2G_LAUNCH` at it:
