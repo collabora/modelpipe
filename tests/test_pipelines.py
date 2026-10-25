@@ -250,6 +250,29 @@ def skip_without_server(pipeline):
             pytest.skip(f"nothing listens on {host}:{port}")
 
 
+# the first word after the launcher or a `!`, caps and pad references excluded
+ELEMENT_NAME = re.compile(r"(?:^|!)\s*(?:\\\s*)*([a-z][a-z0-9_]*)(?=\s|$)")
+
+
+@cache
+def gstreamer_has_element(name):
+    gst_inspect = shutil.which("gst-inspect-1.0")
+    if gst_inspect is None:
+        raise RuntimeError("gst-inspect-1.0 is not on PATH")
+    completed = subprocess.run([gst_inspect, "--exists", name], capture_output=True)
+    return completed.returncode == 0
+
+
+# a missing modelpipe element is a failure, a missing gstreamer plugin is the platform
+def skip_without_gstreamer_elements(pipeline):
+    description = pipeline.removeprefix(LAUNCHER)
+    for name in ELEMENT_NAME.findall(description):
+        if name.startswith(("mp_", "demo_")):
+            continue
+        if not gstreamer_has_element(name):
+            pytest.skip(f"this gstreamer has no {name} element")
+
+
 def skip_without_default_audio_source(pipeline):
     if not BARE_PULSE_SOURCE.search(pipeline):
         return
@@ -362,6 +385,7 @@ def test_pipeline(pipeline, tmp_path):
     skip_without_engine_or_exported_model(pipeline)
     skip_without_onnx_provider(pipeline)
     skip_without_server(pipeline)
+    skip_without_gstreamer_elements(pipeline)
     unique_id = uuid.uuid4().hex[:8]
     log_file = LOG_DIR / f"test_{unique_id}.log"
 
