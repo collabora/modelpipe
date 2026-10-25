@@ -25,26 +25,28 @@ try:
 
     from backend import post_error
     from backend.cuda_driver import call_cuda_driver, current_cuda_context
-    from backend.gst.cuda_memory import (
-        GST_MAP_CUDA,
-        GST_MAP_READ,
-        MAPPED_MEMORY_COUNT,
-        VIDEO_MEMORY,
-        GstCudaMemory,
-        GstMapInfo,
-        gst_cuda_library,
-        gstreamer_library,
-        row_pitch,
-    )
-    from backend.gst.cuda_vulkan_interop import (
-        CHANNEL_COUNT,
-        EXTERNAL_MEMORY_EXTENSIONS,
-        SharedImage,
-        cuda_device_uuid,
-        current_cuda_device_uuid,
-        vulkan_device_index_for_cuda,
-    )
-    from backend.gst import gst_vulkan
+
+    if backend.BACKEND == "gst":
+        from backend.gst.cuda_memory import (
+            GST_MAP_CUDA,
+            GST_MAP_READ,
+            MAPPED_MEMORY_COUNT,
+            VIDEO_MEMORY,
+            GstCudaMemory,
+            GstMapInfo,
+            gst_cuda_library,
+            gstreamer_library,
+            row_pitch,
+        )
+        from backend.gst.cuda_vulkan_interop import (
+            CHANNEL_COUNT,
+            EXTERNAL_MEMORY_EXTENSIONS,
+            SharedImage,
+            cuda_device_uuid,
+            current_cuda_device_uuid,
+            vulkan_device_index_for_cuda,
+        )
+        from backend.gst import gst_vulkan
 except (ImportError, ValueError) as e:
     CAN_REGISTER_ELEMENT = False
     GlobalLogger().warning(
