@@ -12,6 +12,7 @@ import socket
 import uuid
 import stat
 import time
+from functools import cache
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugins" / "python"))
 
@@ -47,11 +48,12 @@ LAUNCHER = (
 )
 WINDOWS = sys.platform == "win32"
 
-# small models on the cpu, no display or microphone
+# small models, no display or microphone, and the cpu when torch sees no gpu
 HEADLESS = os.environ.get("HEADLESS_PIPELINES") == "1"
 CAPTURE_SOURCES = ("pulsesrc", "pipewiresrc", "autoaudiosrc", "alsasrc", "v4l2src")
-# the engines job covers exported models, torch.compile takes minutes on a runner
-EXPORTED_MODEL_MARKERS = ("engine-name=", "compile=True")
+# torch.compile takes minutes on a runner
+TORCH_COMPILE_MARKER = "compile=True"
+ENGINE_NAME = re.compile(r"\bengine-name=([^\s!]+)")
 # too large for a runner, or needing a server or a model file outside the repo
 HEAVY_ELEMENTS = (
     "mp_llm",
@@ -69,11 +71,11 @@ HEAVY_ELEMENTS = (
     "mp_face",
     "mp_ocr",
 )
-HEADLESS_SKIP_MARKERS = CAPTURE_SOURCES + EXPORTED_MODEL_MARKERS + HEAVY_ELEMENTS
+HEADLESS_SKIP_MARKERS = CAPTURE_SOURCES + (TORCH_COMPILE_MARKER,) + HEAVY_ELEMENTS
 DISPLAY_SINK_PATTERN = re.compile(r"\b(?:autovideosink|glimagesink)\b")
 HEADLESS_SINK = "fakevideosink"
+CUDA_TO_CPU = (re.compile(r"\bdevice=cuda(?::\d+)?\b"), "device=cpu")
 HEADLESS_REWRITES = (
-    (re.compile(r"\bdevice=cuda(?::\d+)?\b"), "device=cpu"),
     (re.compile(r"\byolo11m\b"), "yolo11n"),
     (DISPLAY_SINK_PATTERN, HEADLESS_SINK),
 )
@@ -84,12 +86,34 @@ FIRST_ML_ELEMENT = re.compile(r"\b(?:mp_\w+|demo_\w+)\b")
 LOG_TAIL_LINES = 40
 
 
+@cache
+def torch_sees_a_gpu():
+    if importlib.util.find_spec("torch") is None:
+        return False
+    import torch
+
+    return torch.cuda.is_available()
+
+
+# the engines job covers the other engines, and pytorch's cuda frame examples need a gpu
+def needs_another_job(pipeline):
+    engine = ENGINE_NAME.search(pipeline)
+    return engine is not None and (
+        engine.group(1) != "pytorch" or not torch_sees_a_gpu()
+    )
+
+
 def runs_headless(pipeline):
+    if needs_another_job(pipeline):
+        return False
     return not any(marker in pipeline for marker in HEADLESS_SKIP_MARKERS)
 
 
 def headless_pipeline(pipeline):
-    for pattern, replacement in HEADLESS_REWRITES:
+    rewrites = (
+        HEADLESS_REWRITES if torch_sees_a_gpu() else (CUDA_TO_CPU, *HEADLESS_REWRITES)
+    )
+    for pattern, replacement in rewrites:
         pipeline = pattern.sub(replacement, pipeline)
     return capped_before_first_element(pipeline)
 
