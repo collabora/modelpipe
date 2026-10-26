@@ -5,7 +5,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import math
 from typing import NamedTuple
 
 from utils.format_converter import packed_format_layout
@@ -32,6 +31,51 @@ FULL_INTENSITY = 255
 SLABS_PER_BOX = 4
 # the 2d prefix sum of these corner marks is one inside the rectangle
 CORNER_SIGNS = (1, -1, -1, 1)
+# column, line, red, green, blue and alpha of one square
+SQUARE_ROW_FIELDS = 6
+
+
+class PixelEntries(NamedTuple):
+    lines: object
+    columns: object
+    # channel values in buffer order, 0 to 255
+    colours: object
+    alphas: object
+
+
+def concatenated_entries(entries):
+    import numpy as np
+
+    return PixelEntries(*(np.concatenate(field) for field in zip(*entries)))
+
+
+def polyline_segments(points, color):
+    pairs = list(zip(points, points[1:])) or [(points[0], points[0])]
+    return [(start, end, color) for start, end in pairs]
+
+
+def segment_rows(segments):
+    import numpy as np
+
+    if not segments:
+        return np.empty((0, SQUARE_ROW_FIELDS))
+    starts = np.array([(start["x"], start["y"]) for start, _, _ in segments], float)
+    ends = np.array([(end["x"], end["y"]) for _, end, _ in segments], float)
+    colours = np.array(
+        [(color.r, color.g, color.b, color.a) for _, _, color in segments], float
+    )
+    steps = np.maximum(1, np.ceil(np.abs(ends - starts).max(1))).astype(np.int64)
+    samples_per_segment = steps + 1
+    segment_of_sample = np.repeat(np.arange(len(segments)), samples_per_segment)
+    first_sample = samples_per_segment.cumsum() - samples_per_segment
+    fractions = (
+        np.arange(len(segment_of_sample)) - first_sample[segment_of_sample]
+    ) / steps[segment_of_sample]
+    points = (
+        starts[segment_of_sample]
+        + (ends - starts)[segment_of_sample] * fractions[:, None]
+    )
+    return np.column_stack([points, colours[segment_of_sample]])
 
 
 class TorchOverlayGraphics(OverlayGraphics):
@@ -164,8 +208,13 @@ class TorchOverlayGraphics(OverlayGraphics):
         self.draw_texts([(label, x, y)], color, font_size, 0)
 
     def draw_texts(self, labels, color, font_size, baseline_offset):
+        self.draw_entries(self.text_entries(labels, color, font_size, baseline_offset))
+
+    def text_entries(self, labels, color, font_size, baseline_offset):
+        import numpy as np
+
         if font_size not in self.glyph_atlases:
-            self.glyph_atlases[font_size] = GlyphAtlas(font_size, self.pixels.device)
+            self.glyph_atlases[font_size] = GlyphAtlas(font_size)
         atlas = self.glyph_atlases[font_size]
         placed_glyphs = []
         for text, x, y in labels:
@@ -176,12 +225,13 @@ class TorchOverlayGraphics(OverlayGraphics):
                 placed_glyphs.append((glyph, line, round(column)))
                 column += atlas.advances[glyph]
         if not placed_glyphs:
-            return
+            return empty_entries()
         inked = atlas.inked_pixels(placed_glyphs)
-        colours = self.device_colour(color).expand(
-            len(inked.alphas), COLOUR_CHANNEL_COUNT
+        colours = np.broadcast_to(
+            np.array(self.channel_values(color), np.float32),
+            (len(inked.alphas), COLOUR_CHANNEL_COUNT),
         )
-        self.draw_pixels(inked.lines, inked.columns, colours, inked.alphas)
+        return PixelEntries(inked.lines, inked.columns, colours, inked.alphas)
 
     def draw_tracking_point(self, center, color, opacity):
         self.draw_squares(
@@ -192,51 +242,56 @@ class TorchOverlayGraphics(OverlayGraphics):
         self.draw_segments([(start, end, color)], width)
 
     def draw_polyline(self, points, color, width):
-        pairs = list(zip(points, points[1:])) or [(points[0], points[0])]
-        self.draw_segments([(start, end, color) for start, end in pairs], width)
+        self.draw_segments(polyline_segments(points, color), width)
 
     def draw_segments(self, segments, width):
-        import numpy as np
-
-        rows = []
-        for start, end, color in segments:
-            first = np.array((start["x"], start["y"]), float)
-            last = np.array((end["x"], end["y"]), float)
-            steps = max(1, math.ceil(np.abs(last - first).max()))
-            fractions = np.arange(0, steps + 1)[:, None] / steps
-            rows.extend(
-                self.square_row({"x": x, "y": y}, color, color.a)
-                for x, y in first + (last - first) * fractions
-            )
-        self.draw_squares(rows, width)
+        self.draw_squares(segment_rows(segments), width)
 
     def square_row(self, center, color, alpha):
         return (center["x"], center["y"], color.r, color.g, color.b, alpha)
 
     def draw_squares(self, rows, size):
+        self.draw_entries(self.square_entries(rows, size))
+
+    def square_entries(self, rows, size):
+        import numpy as np
+
+        table = np.asarray(rows, dtype=np.float32).reshape(-1, SQUARE_ROW_FIELDS)
+        centre_columns, centre_lines = np.rint(table[:, :2]).astype(np.int64).T
+        channel_values = table[:, 2:5] * FULL_INTENSITY
+        if self.reverses_colour:
+            channel_values = channel_values[:, ::-1]
+        offsets = np.arange(size) - size // 2
+        columns, lines = np.broadcast_arrays(
+            centre_columns[:, None, None] + offsets[None, None, :],
+            centre_lines[:, None, None] + offsets[None, :, None],
+        )
+        pixels_per_square = size * size
+        return PixelEntries(
+            lines.reshape(-1),
+            columns.reshape(-1),
+            np.repeat(channel_values, pixels_per_square, axis=0),
+            np.repeat(table[:, 5], pixels_per_square),
+        )
+
+    def draw_entries(self, entries):
         import numpy as np
         import torch
 
-        if not rows:
+        if not len(entries.lines):
             return
-        device = self.pixels.device
-        table = torch.from_numpy(np.array(rows, dtype=np.float32)).to(device)
-        centre_columns, centre_lines, colours, alphas = table.split(
-            [1, 1, COLOUR_CHANNEL_COUNT, 1], dim=1
+        table = np.empty((len(entries.lines), SQUARE_ROW_FIELDS), np.float32)
+        table[:, 0] = entries.lines
+        table[:, 1] = entries.columns
+        table[:, 2:5] = entries.colours
+        table[:, 5] = entries.alphas
+        lines, columns, colours, alphas = (
+            torch.from_numpy(table)
+            .to(self.pixels.device)
+            .split([1, 1, COLOUR_CHANNEL_COUNT, 1], dim=1)
         )
-        channel_values = colours * FULL_INTENSITY
-        if self.reverses_colour:
-            channel_values = channel_values.flip(1)
-        offsets = torch.arange(size, device=device) - size // 2
-        columns = centre_columns.round().long()[:, :, None] + offsets[None, None, :]
-        lines = centre_lines.round().long()[:, :, None] + offsets[None, :, None]
-        columns, lines = torch.broadcast_tensors(columns, lines)
-        pixels_per_square = size * size
         self.draw_pixels(
-            lines.reshape(-1),
-            columns.reshape(-1),
-            channel_values.repeat_interleave(pixels_per_square, dim=0),
-            alphas.repeat_interleave(pixels_per_square),
+            lines.reshape(-1).long(), columns.reshape(-1).long(), colours, alphas
         )
 
     # only the last entry over a pixel is blended
@@ -295,6 +350,17 @@ class TorchOverlayGraphics(OverlayGraphics):
         return self.device_colours[key]
 
 
+def empty_entries():
+    import numpy as np
+
+    return PixelEntries(
+        np.empty(0, np.int64),
+        np.empty(0, np.int64),
+        np.empty((0, COLOUR_CHANNEL_COUNT), np.float32),
+        np.empty(0, np.float32),
+    )
+
+
 class InkedPixels(NamedTuple):
     lines: object
     columns: object
@@ -302,17 +368,14 @@ class InkedPixels(NamedTuple):
 
 
 class GlyphAtlas:
-    def __init__(self, font_size, device):
+    def __init__(self, font_size):
         from PIL import ImageFont
 
         self.font = ImageFont.load_default(size=font_size)
         self.ascent, self.descent = self.font.getmetrics()
-        self.device = device
         self.glyph_of_character = {}
         self.advances = []
-        self.pixel_counts = []
         self.glyph_tables = []
-        self.uploaded_glyph_count = 0
 
     def glyph(self, character):
         if character not in self.glyph_of_character:
@@ -334,51 +397,20 @@ class GlyphAtlas:
             np.stack([lines, columns + left, alpha[lines, columns]]).astype(np.int64)
         )
         self.advances.append(self.font.getlength(character))
-        self.pixel_counts.append(len(lines))
         return len(self.advances) - 1
-
-    def upload_new_glyphs(self):
-        import numpy as np
-        import torch
-
-        if self.uploaded_glyph_count == len(self.glyph_tables):
-            return
-        table = torch.from_numpy(np.concatenate(self.glyph_tables, axis=1)).to(
-            self.device
-        )
-        self.pixel_offsets = table[:2]
-        self.pixel_alphas = table[2].float() / FULL_INTENSITY
-        counts = torch.tensor(self.pixel_counts, device=self.device)
-        self.glyph_pixel_counts = counts
-        self.glyph_first_pixels = counts.cumsum(0) - counts
-        self.uploaded_glyph_count = len(self.glyph_tables)
 
     # placed_glyphs holds (glyph, line, column) rows
     def inked_pixels(self, placed_glyphs):
         import numpy as np
-        import torch
 
-        self.upload_new_glyphs()
-        pixel_total = sum(self.pixel_counts[glyph] for glyph, _, _ in placed_glyphs)
-        # a list of tuples converts to a tensor far slower than through numpy
-        glyphs, line_origins, column_origins = (
-            torch.from_numpy(np.array(placed_glyphs, dtype=np.int64)).to(self.device).T
+        glyphs, line_origins, column_origins = np.array(placed_glyphs, dtype=np.int64).T
+        tables = [self.glyph_tables[glyph] for glyph in glyphs]
+        lines, columns, alphas = np.concatenate(tables, axis=1)
+        placement_of_pixel = np.repeat(
+            np.arange(len(glyphs)), [table.shape[1] for table in tables]
         )
-        counts = self.glyph_pixel_counts[glyphs]
-        placement_of_pixel = torch.repeat_interleave(
-            torch.arange(len(placed_glyphs), device=self.device),
-            counts,
-            output_size=pixel_total,
-        )
-        first_output_pixel = counts.cumsum(0) - counts
-        source = (
-            self.glyph_first_pixels[glyphs][placement_of_pixel]
-            + torch.arange(pixel_total, device=self.device)
-            - first_output_pixel[placement_of_pixel]
-        )
-        lines, columns = self.pixel_offsets[:, source]
         return InkedPixels(
             lines=lines + line_origins[placement_of_pixel],
             columns=columns + column_origins[placement_of_pixel],
-            alphas=self.pixel_alphas[source],
+            alphas=alphas / FULL_INTENSITY,
         )

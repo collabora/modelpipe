@@ -44,8 +44,6 @@ HSV_ROUNDING = 1 << (HSV_SHIFT - 1)
 HUE_RANGE = 180
 HUE_SECTORS = 6
 
-# column, line, red, green, blue and alpha of one square
-SQUARE_ROW_FIELDS = 6
 # cv2.getTextSize height per unit of hershey scale matches the pil font ascent
 HERSHEY_SCALE_TO_FONT_PIXELS = 27
 
@@ -237,9 +235,10 @@ class TorchSportDrawing:
         self.jersey_masks = None
         self.uploaded_image = None
         self.uploaded_pixels = None
-        # every draw_squares call scans a frame-sized table
-        self.queued_square_rows = []
-        self.queued_square_size = None
+        # every draw_entries call scans a frame-sized table
+        self.queued_shapes = []
+        # antialiased text blends over a shape only when drawn in a later call
+        self.queued_labels = []
 
     @contextmanager
     def drawing_on(self, frame):
@@ -252,9 +251,10 @@ class TorchSportDrawing:
             self.frame = frame
             try:
                 yield self
-                self.draw_queued_squares()
+                self.draw_queued()
             finally:
-                self.queued_square_rows = []
+                self.queued_shapes = []
+                self.queued_labels = []
                 self.graphics.finalize()
                 self.frame = None
                 self.jersey_masks = None
@@ -278,46 +278,60 @@ class TorchSportDrawing:
             math.radians(start_angle), math.radians(end_angle), sample_count
         )
         colour = self.colour(rgba)
-        rows = np.empty((sample_count, SQUARE_ROW_FIELDS))
-        rows[:, 0] = center_x + horizontal_axis * np.cos(angles)
-        rows[:, 1] = center_y + vertical_axis * np.sin(angles)
-        rows[:, 2:] = (colour.r, colour.g, colour.b, colour.a)
-        if thickness != self.queued_square_size:
-            self.draw_queued_squares()
-            self.queued_square_size = thickness
-        self.queued_square_rows.extend(rows.tolist())
+        rows = np.column_stack(
+            [
+                center_x + horizontal_axis * np.cos(angles),
+                center_y + vertical_axis * np.sin(angles),
+                np.tile((colour.r, colour.g, colour.b, colour.a), (sample_count, 1)),
+            ]
+        )
+        self.queued_shapes.append(self.graphics.square_entries(rows, thickness))
 
-    def draw_queued_squares(self):
-        if self.queued_square_rows:
-            self.graphics.draw_squares(self.queued_square_rows, self.queued_square_size)
-        self.queued_square_rows = []
+    def queue_segments(self, segments, thickness):
+        from overlay_helper.overlay_torch import segment_rows
+
+        self.queued_shapes.append(
+            self.graphics.square_entries(segment_rows(segments), thickness)
+        )
+
+    def draw_queued(self):
+        from overlay_helper.overlay_torch import concatenated_entries
+
+        for queue in (self.queued_shapes, self.queued_labels):
+            if queue:
+                self.graphics.draw_entries(concatenated_entries(queue))
+        self.queued_shapes = []
+        self.queued_labels = []
 
     def draw_triangle(self, points, fill_rgba, outline_rgba, outline_thickness):
-        import torch
+        import numpy as np
+        from overlay_helper.overlay_torch import PixelEntries
 
-        self.draw_queued_squares()
-        device = self.frame.device
-        corners = torch.tensor(points, dtype=torch.float32, device=device)
-        left, top = corners.min(0).values.floor().long().tolist()
-        right, bottom = corners.max(0).values.ceil().long().tolist()
-        lines, columns = torch.meshgrid(
-            torch.arange(top, bottom + 1, device=device),
-            torch.arange(left, right + 1, device=device),
-            indexing="ij",
+        corners = np.array(points, dtype=np.float32)
+        left, top = np.floor(corners.min(0)).astype(np.int64)
+        right, bottom = np.ceil(corners.max(0)).astype(np.int64)
+        lines, columns = np.meshgrid(
+            np.arange(top, bottom + 1), np.arange(left, right + 1), indexing="ij"
         )
         lines, columns = lines.reshape(-1), columns.reshape(-1)
-        inside = self.inside_triangle(corners, columns.float(), lines.float())
-        lines, columns = lines[inside], columns[inside]
-        fill = self.graphics.device_colour(self.colour(fill_rgba))
-        self.graphics.draw_pixels(
-            lines,
-            columns,
-            fill.expand(len(lines), COLOUR_CHANNEL_COUNT),
-            torch.ones(len(lines), device=device),
+        inside = self.inside_triangle(
+            corners, columns.astype(np.float32), lines.astype(np.float32)
+        )
+        fill_pixel_count = int(inside.sum())
+        fill = np.array(
+            self.graphics.channel_values(self.colour(fill_rgba)), np.float32
+        )
+        self.queued_shapes.append(
+            PixelEntries(
+                lines[inside],
+                columns[inside],
+                np.broadcast_to(fill, (fill_pixel_count, COLOUR_CHANNEL_COUNT)),
+                np.ones(fill_pixel_count, np.float32),
+            )
         )
         outline = self.colour(outline_rgba)
         vertices = [{"x": x, "y": y} for x, y in points]
-        self.graphics.draw_segments(
+        self.queue_segments(
             [
                 (start, end, outline)
                 for start, end in zip(vertices, vertices[1:] + vertices[:1])
@@ -327,7 +341,7 @@ class TorchSportDrawing:
 
     @staticmethod
     def inside_triangle(corners, columns, lines):
-        import torch
+        import numpy as np
 
         sides = []
         for index in range(3):
@@ -337,19 +351,20 @@ class TorchSportDrawing:
                 (end_x - start_x) * (lines - start_y)
                 - (end_y - start_y) * (columns - start_x)
             )
-        sides = torch.stack(sides)
+        sides = np.stack(sides)
         return (sides >= 0).all(0) | (sides <= 0).all(0)
 
     def draw_polyline(self, points, rgba, thickness):
-        self.draw_queued_squares()
-        self.graphics.draw_polyline(
-            [{"x": x, "y": y} for x, y in points], self.colour(rgba), thickness
+        from overlay_helper.overlay_torch import polyline_segments
+
+        self.queue_segments(
+            polyline_segments([{"x": x, "y": y} for x, y in points], self.colour(rgba)),
+            thickness,
         )
 
     def draw_segments(self, segments, rgba, thickness):
-        self.draw_queued_squares()
         colour = self.colour(rgba)
-        self.graphics.draw_segments(
+        self.queue_segments(
             [
                 ({"x": start_x, "y": start_y}, {"x": end_x, "y": end_y}, colour)
                 for (start_x, start_y), (end_x, end_y) in segments
@@ -358,13 +373,14 @@ class TorchSportDrawing:
         )
 
     def draw_text(self, text, origin, scale, rgba, thickness):
-        self.draw_queued_squares()
         x, y = origin
         font_size = round(scale * HERSHEY_SCALE_TO_FONT_PIXELS)
-        self.graphics.draw_texts([(text, x, y)], self.colour(rgba), font_size, 0)
+        self.queued_labels.append(
+            self.graphics.text_entries([(text, x, y)], self.colour(rgba), font_size, 0)
+        )
 
     def fill_rectangle(self, top_left, bottom_right, rgba):
-        self.draw_queued_squares()
+        self.draw_queued()
         left, top = top_left
         right, bottom = bottom_right
         # opencv includes the bottom right corner
@@ -373,7 +389,6 @@ class TorchSportDrawing:
         )
 
     def draw_rectangle(self, top_left, bottom_right, rgba, thickness):
-        self.draw_queued_squares()
         left, top = top_left
         right, bottom = bottom_right
         corners = [
@@ -383,7 +398,7 @@ class TorchSportDrawing:
             {"x": left, "y": bottom},
         ]
         colour = self.colour(rgba)
-        self.graphics.draw_segments(
+        self.queue_segments(
             [
                 (start, end, colour)
                 for start, end in zip(corners, corners[1:] + corners[:1])
@@ -394,7 +409,7 @@ class TorchSportDrawing:
     def blit(self, image, left, top):
         import torch
 
-        self.draw_queued_squares()
+        self.draw_queued()
         if image is not self.uploaded_image:
             self.uploaded_pixels = torch.from_numpy(image).to(self.frame.device)
             self.uploaded_image = image
@@ -424,7 +439,7 @@ class TorchSportDrawing:
         import torch
 
         if self.jersey_masks is None:
-            self.draw_queued_squares()
+            self.draw_queued()
             rgb = self.frame[..., self.logical_rgb_channels]
             masks = jersey_hue_masks(*opencv_hsv(rgb))
             self.jersey_masks = torch.stack([masks[name] for name in JERSEY_VOTE_NAMES])

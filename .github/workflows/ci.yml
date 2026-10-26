@@ -154,10 +154,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.12", "3.14"]
         exclude:
-          # ubuntu-latest is 24.04 with system Python 3.12;
-          # GStreamer gi bindings are built for 3.12 only
+          # the ubuntu venv uses the system python 3.14, the only one with gi bindings
           - os: ubuntu-latest
-            python-version: "3.14"
+            python-version: "3.12"
         include:
           - os: ubuntu-latest
             # the gst python plugin loader links the system libpython
