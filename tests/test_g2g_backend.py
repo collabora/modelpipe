@@ -645,6 +645,37 @@ def test_baseball_overlay_colours_the_person_holding_the_bat_as_the_batter():
     assert bat_edge.any(), "the bat outline was drawn"
 
 
+def test_baseball_overlay_keeps_the_batter_role_from_a_tracking_relation():
+    pytest.importorskip("cv2")
+    from baseball_overlay import BaseballOverlay, ROLE_RGBA, BATTER_ROLE
+
+    overlay = BaseballOverlay()
+    overlay.show_labels = False
+    width, height = 1280, 720
+    batter = {"label": "person", "score": 0.9, **BATTER_BOX}
+    bat = {"label": "baseball bat", "score": 0.9, **BAT_BOX}
+    for _ in range(BASEBALL_FRAMES):
+        overlay.g2g_process(
+            bytearray(width * height * 4),
+            width,
+            height,
+            "RGBA",
+            StubMetaSink(
+                upstream_objects=[batter, bat], upstream_tracking_ids=[1, None]
+            ),
+        )
+    frame = bytearray(width * height * 4)
+    overlay.g2g_process(
+        frame,
+        width,
+        height,
+        "RGBA",
+        StubMetaSink(upstream_objects=[batter], upstream_tracking_ids=[1]),
+    )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    assert ROLE_RGBA[BATTER_ROLE][:3] in ellipse_colours(pixels, BATTER_BOX)
+
+
 def test_baseball_overlay_drops_a_box_nested_in_a_stronger_one():
     from baseball_overlay import drop_nested
 
@@ -661,6 +692,57 @@ def test_baseball_overlay_leaves_the_bat_unmarked_when_equipment_is_off():
     assert not pixels[
         bat_top : bat_top + 1, BAT_BOX["x"] : BAT_BOX["x"] + BAT_BOX["w"]
     ].any()
+
+
+COCO_KEYPOINT_COUNT = 17
+LEFT_SHOULDER = 5
+LEFT_ELBOW = 7
+
+
+def upper_arm_pose(box, shoulder, elbow):
+    keypoints = [[0.0, 0.0]] * COCO_KEYPOINT_COUNT
+    confidences = [0.0] * COCO_KEYPOINT_COUNT
+    for index, point in ((LEFT_SHOULDER, shoulder), (LEFT_ELBOW, elbow)):
+        keypoints[index] = list(point)
+        confidences[index] = 0.9
+    corners = [box["x"], box["y"], box["x"] + box["w"], box["y"] + box["h"]]
+    return {"box": corners, "keypoints": keypoints, "kp_conf": confidences}
+
+
+def test_baseball_overlay_draws_the_skeleton_of_the_batter_only():
+    pytest.importorskip("cv2")
+    pytest.importorskip("ultralytics")
+    import json
+
+    from baseball_overlay import BaseballOverlay, ROLE_RGBA, BATTER_ROLE
+
+    overlay = BaseballOverlay()
+    overlay.show_labels = False
+    overlay.show_equipment = False
+    width, height = 1280, 720
+    upstream = [
+        {"label": "person_id_1", "score": 1.0, **BATTER_BOX},
+        {"label": "person_id_2", "score": 1.0, **FIELDER_BOX},
+        {"label": "baseball bat", "score": 0.9, **BAT_BOX},
+    ]
+    poses = [
+        upper_arm_pose(BATTER_BOX, (520, 260), (520, 330)),
+        upper_arm_pose(FIELDER_BOX, (1020, 420), (1020, 480)),
+    ]
+    frame = bytearray(width * height * 4)
+    overlay.g2g_process(
+        frame,
+        width,
+        height,
+        "RGBA",
+        StubMetaSink(
+            upstream_objects=upstream,
+            upstream_blobs={"pose": json.dumps(poses).encode()},
+        ),
+    )
+    pixels = np.frombuffer(frame, dtype=np.uint8).reshape(height, width, 4)
+    assert tuple(pixels[295, 520, :3]) == ROLE_RGBA[BATTER_ROLE][:3]
+    assert not pixels[440:470, 1015:1025].any(), "the fielder has no skeleton"
 
 
 def test_aggregator_drives_the_same_hook_a_transform_fills_in():

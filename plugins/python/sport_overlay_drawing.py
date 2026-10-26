@@ -164,6 +164,13 @@ class OpenCVSportDrawing:
             cv2.LINE_AA,
         )
 
+    def draw_segments(self, segments, rgba, thickness):
+        import cv2
+
+        colour = self.buffer_colour(rgba)
+        for start, end in segments:
+            cv2.line(self.frame, start, end, colour, thickness, cv2.LINE_AA)
+
     def draw_text(self, text, origin, scale, rgba, thickness):
         import cv2
 
@@ -337,6 +344,17 @@ class TorchSportDrawing:
         self.draw_queued_squares()
         self.graphics.draw_polyline(
             [{"x": x, "y": y} for x, y in points], self.colour(rgba), thickness
+        )
+
+    def draw_segments(self, segments, rgba, thickness):
+        self.draw_queued_squares()
+        colour = self.colour(rgba)
+        self.graphics.draw_segments(
+            [
+                ({"x": start_x, "y": start_y}, {"x": end_x, "y": end_y}, colour)
+                for (start_x, start_y), (end_x, end_y) in segments
+            ],
+            thickness,
         )
 
     def draw_text(self, text, origin, scale, rgba, thickness):

@@ -2,7 +2,7 @@
 # Baseball overlay demo.
 #
 # Pipeline:
-#   mp_yolo (stock coco weights)  ->  mp_tracker (ByteTrack)  ->  mp_baseball_overlay
+#   mp_yolo (stock coco weights)  ->  mp_tracker (ByteTrack)  ->  mp_yolo_pose  ->  mp_baseball_overlay
 #
 # Usage:
 #   demo/baseball/run.sh [INPUT.mp4] [OUTPUT.mp4] [WxH]      # file -> annotated mp4
@@ -30,11 +30,13 @@ NEWTRACK="${NEWTRACK:-0.4}" # min confidence to start a new track
 BALL_TRAIL="${BALL_TRAIL:-true}"
 LABELS="${LABELS:-true}"   # write batter / fielder / bat / glove next to each marker
 EQUIPMENT="${EQUIPMENT:-true}" # outline the bat and the glove
+POSE="${POSE:-true}"       # draw the batter's skeleton from $MODEL-pose
 CLIP="data/baseball_batter.mp4"
 
 if [[ "$HOST" == "g2g" ]]; then
   DETECTOR_ELEMENT="pyelement module=yolo class=YOLOTransform"
   TRACKER_ELEMENT="pyelement module=tracker class=TrackerTransform"
+  POSE_ELEMENT="pyelement module=pose class=YOLOPoseTransform"
   OVERLAY_ELEMENT="pyelement module=baseball_overlay class=BaseballOverlay"
   CONVERT="videoconvertscale"
   DECODE="qtdemux ! ffmpegdec ! $CONVERT"
@@ -47,6 +49,7 @@ if [[ "$HOST" == "g2g" ]]; then
     DECODE="qtdemux ! h264parse ! nvdec"
     DETECTOR_ELEMENT="$DETECTOR_ELEMENT $CUDA_FRAMES"
     TRACKER_ELEMENT="$TRACKER_ELEMENT $CUDA_FRAMES"
+    POSE_ELEMENT="$POSE_ELEMENT $CUDA_FRAMES"
     OVERLAY_ELEMENT="$OVERLAY_ELEMENT $CUDA_FRAMES"
     DISPLAY_SINK="cudaglsink"
     ENCODE="nvenc ! mp4mux"
@@ -54,6 +57,7 @@ if [[ "$HOST" == "g2g" ]]; then
 else
   DETECTOR_ELEMENT="mp_yolo name=detector"
   TRACKER_ELEMENT="mp_tracker"
+  POSE_ELEMENT="mp_yolo_pose name=pose"
   OVERLAY_ELEMENT="mp_baseball_overlay name=overlay"
   CONVERT="videoconvert ! videoscale"
   DOWNLOAD=""
@@ -73,16 +77,19 @@ input_caps() {
 }
 DETECT="$DETECTOR_ELEMENT model-name=models/baseball/$MODEL device=cuda:0 interval=$INTERVAL imgsz=$IMGSZ confidence=$CONF"
 TRACK="$TRACKER_ELEMENT tracker-type=bytetrack new-track-confidence=$NEWTRACK"
+POSE_ESTIMATE="$POSE_ELEMENT model-name=models/baseball/$MODEL-pose device=cuda:0 visualize=false"
 OVERLAY="$OVERLAY_ELEMENT ball-trail=$BALL_TRAIL show-labels=$LABELS show-equipment=$EQUIPMENT"
 
 if [[ "$HOST" == "g2g" ]]; then
   # g2g has no queue element and needs none
   CHAIN="$DETECT ! $TRACK ! $OVERLAY"
+  [[ "$POSE" == "true" ]] && CHAIN="$DETECT ! $TRACK ! $POSE_ESTIMATE ! $OVERLAY"
 else
   # a queue at each stage boundary lets inference, tracking and the sink overlap
   Q="queue max-size-buffers=8 max-size-time=0 max-size-bytes=0"
   PREROLL="queue max-size-buffers=100 max-size-time=0 max-size-bytes=0"
   CHAIN="$Q ! $DETECT ! $Q ! $TRACK ! $Q ! $OVERLAY"
+  [[ "$POSE" == "true" ]] && CHAIN="$Q ! $DETECT ! $Q ! $TRACK ! $Q ! $POSE_ESTIMATE ! $Q ! $OVERLAY"
   DISPLAY_SINK="$PREROLL ! ${DOWNLOAD}videoconvert ! autovideosink sync=true"
   CAMERA_SINK="$Q ! ${DOWNLOAD}videoconvert ! autovideosink sync=false"
   ENCODE="$Q ! ${DOWNLOAD}videoconvert ! openh264enc bitrate=8000000 ! h264parse ! mp4mux"

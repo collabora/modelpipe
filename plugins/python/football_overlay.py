@@ -397,6 +397,8 @@ class FootballOverlay(InPlaceVideoTransform):
             return entries
         for obj in analytics.read_objects(meta):
             label, track_id = self._parse_label(obj["label"])
+            if obj["track_id"] is not None:
+                track_id = obj["track_id"]
             x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
             entries.append(
                 {
@@ -1038,11 +1040,9 @@ class FootballOverlay(InPlaceVideoTransform):
         if fmt != self._format_seen:
             self._use_format(fmt)
         all_entries = self._read_metadata(buf)
-        # The buffer carries both the detector's boxes (track_id None) and
-        # the tracker's boxes (track_id set). Tracking state/HUD always use
-        # the tracked entries; what we *draw* depends on draw_from_detections.
+        # the tracker tags the detector's boxes with a track_id in place
         track_entries = [e for e in all_entries if e["track_id"] is not None]
-        det_entries = [e for e in all_entries if e["track_id"] is None]
+        det_entries = all_entries
 
         # Ball position for contact counting: prefer a tracked ball, else
         # fall back to the strongest ball *detection* (the ball is small and

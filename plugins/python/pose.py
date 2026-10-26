@@ -18,6 +18,7 @@ try:
     from engine.engine_factory import EngineFactory
     from overlay_helper.overlay_torch import TorchOverlayGraphics
     from overlay_helper.overlay_utils_interface import Color
+    from utils.coco_pose import DRAWN_KEYPOINT_CONFIDENCE, coco_skeleton
 
 except ImportError as e:
     CAN_REGISTER_ELEMENT = False
@@ -27,8 +28,6 @@ except ImportError as e:
 POSE_META_HEADER = b"GST-POSE:"
 
 KEYPOINT_RADIUS = 4
-# ultralytics draws a keypoint from this confidence
-DRAWN_KEYPOINT_CONFIDENCE = 0.25
 RGB_CHANNELS = 3
 FULL_INTENSITY = 255
 OPAQUE = 1.0
@@ -228,7 +227,7 @@ class YOLOPoseTransform(BaseObjectDetector):
         )
         self.pose_style = SimpleNamespace(
             line_width=annotator.lw,
-            skeleton=[(first - 1, second - 1) for first, second in annotator.skeleton],
+            skeleton=coco_skeleton(),
             keypoint_colours=[palette_colour(row) for row in annotator.kpt_color],
             limb_colours=[palette_colour(row) for row in annotator.limb_color],
         )

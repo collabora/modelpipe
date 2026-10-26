@@ -1,7 +1,7 @@
 # Baseball demo
 
 Detection, tracking and a baseball overlay:
-`mp_yolo` -> `mp_tracker` -> `mp_baseball_overlay`.
+`mp_yolo` -> `mp_tracker` -> `mp_yolo_pose` -> `mp_baseball_overlay`.
 
 The detector is the stock `yolo11m` COCO model, which already knows `person`,
 `baseball bat`, `baseball glove` and `sports ball`. No training is needed. The
@@ -9,12 +9,14 @@ overlay draws a foot ellipse per person coloured by role, an outline around the
 bat and the glove, a ring on the ball and a trail of where the ball has been.
 A person whose box overlaps a bat is the batter (red), one overlapping a glove
 is a fielder (blue), anyone else is white. The role is voted per track id, so
-it stays put once the bat or glove is hidden for a few frames.
+it stays put once the bat or glove is hidden for a few frames. The batter's
+skeleton comes from `yolo11m-pose`, matched to the batter's box.
 
 ## Models and clip
 
-`run.sh` points `mp_yolo` at `models/baseball/yolo11m`. Ultralytics downloads
-the weights there on first use. `MODEL=yolo11n` and `MODEL=yolo11x` work the
+`run.sh` points `mp_yolo` at `models/baseball/yolo11m` and `mp_yolo_pose` at
+`models/baseball/yolo11m-pose`. Ultralytics downloads the weights there on
+first use. `MODEL=yolo11n` and `MODEL=yolo11x` work the
 same way.
 
 The default clip `data/baseball_batter.mp4` is Mixkit's free
@@ -51,6 +53,7 @@ football demo does.
 | `BALL_TRAIL` | `true`  | Draw the ball trail. |
 | `LABELS`   | `true`    | Write the role next to each person and the class next to bat and glove. |
 | `EQUIPMENT` | `true`   | Outline the bat and the glove. |
+| `POSE`     | `true`    | Draw the batter's skeleton with `$MODEL-pose`. |
 
 ## Overlay properties
 

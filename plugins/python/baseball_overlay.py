@@ -5,16 +5,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import json
 import re
 
 import backend
 from backend import (
     analytics,
+    frameio,
     GObject,
     InPlaceVideoTransform,
     CUDA_DRAW_FRAME_CAPABILITIES,
 )
 from sport_overlay_drawing import drawing_for
+from utils.box_matching import intersection_over_union
+from utils.coco_pose import DRAWN_KEYPOINT_CONFIDENCE, coco_skeleton
 
 # coco class names the stock yolo weights emit
 PERSON_LABEL = "person"
@@ -37,6 +41,9 @@ EQUIPMENT_RGBA = {
 }
 BALL_RGBA = (0, 230, 0, 255)
 BLACK_RGBA = (0, 0, 0, 255)
+JOINT_RGBA = (255, 255, 255, 255)
+
+POSE_BLOB = "pose"
 
 ELLIPSE_START_ANGLE = -45
 ELLIPSE_END_ANGLE = 235
@@ -46,6 +53,9 @@ EQUIPMENT_THICKNESS = 2
 BALL_RING_THICKNESS = 2
 BALL_MIN_RADIUS = 6
 TRAIL_THICKNESS = 2
+SKELETON_THICKNESS = 3
+JOINT_RADIUS = 2
+JOINT_THICKNESS = 3
 LABEL_SCALE = 0.5
 LABEL_THICKNESS = 1
 LABEL_RISE = 6
@@ -65,6 +75,8 @@ NESTED_OVERLAP = 0.7
 BALL_ON_BATTER = 0.5
 # two bat boxes closer than this fraction of their union's diagonal are one bat
 BAT_PART_GAP = 0.25
+# the pose model's box and the detector's box on one person overlap this much
+SAME_PERSON_IOU = 0.5
 
 
 def parse_label(full_label):
@@ -87,6 +99,24 @@ def box_overlap(box, other):
         (other[2] - other[0]) * (other[3] - other[1]),
     )
     return intersection / smaller if smaller > 0 else 0.0
+
+
+def corners_to_xywh(box):
+    x1, y1, x2, y2 = box
+    return {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+
+
+def pose_of(box, poses):
+    target = corners_to_xywh(box)
+    overlap, pose = max(
+        (
+            (intersection_over_union(corners_to_xywh(pose["box"]), target), pose)
+            for pose in poses
+        ),
+        key=lambda scored: scored[0],
+        default=(0.0, None),
+    )
+    return pose if overlap >= SAME_PERSON_IOU else None
 
 
 def box_union(box, other):
@@ -211,6 +241,8 @@ class BaseballOverlay(InPlaceVideoTransform):
             return entries
         for obj in analytics.read_objects(meta):
             label, track_id = parse_label(obj["label"])
+            if obj["track_id"] is not None:
+                track_id = obj["track_id"]
             x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
             entries.append(
                 {
@@ -286,6 +318,31 @@ class BaseballOverlay(InPlaceVideoTransform):
                 str(track_id), (left + 12, top + 14), LABEL_SCALE, BLACK_RGBA, 2
             )
 
+    def _draw_pose(self, drawing, pose, rgba):
+        points = [(int(x), int(y)) for x, y in pose["keypoints"]]
+        seen = [
+            confidence >= DRAWN_KEYPOINT_CONFIDENCE for confidence in pose["kp_conf"]
+        ]
+        drawing.draw_segments(
+            [
+                (points[first], points[second])
+                for first, second in coco_skeleton()
+                if seen[first] and seen[second]
+            ],
+            rgba,
+            SKELETON_THICKNESS,
+        )
+        for point, visible in zip(points, seen):
+            if visible:
+                drawing.draw_ellipse_arc(
+                    point,
+                    (JOINT_RADIUS, JOINT_RADIUS),
+                    0,
+                    360,
+                    JOINT_RGBA,
+                    JOINT_THICKNESS,
+                )
+
     def _draw_label(self, drawing, box, text, rgba):
         x1, y1, _, _ = box
         drawing.draw_text(
@@ -314,9 +371,9 @@ class BaseballOverlay(InPlaceVideoTransform):
         ]
         if not entries:
             return
-        # the tracker's boxes carry an id, the detector's do not
+        # the tracker tags the detector's boxes with an id in place
         tracked = [entry for entry in entries if entry["track_id"] is not None]
-        detected = [entry for entry in entries if entry["track_id"] is None]
+        detected = entries
         people = drop_nested(
             [entry for entry in (tracked or detected) if entry["label"] == PERSON_LABEL]
         )
@@ -328,9 +385,17 @@ class BaseballOverlay(InPlaceVideoTransform):
             [entry for entry in detected if entry["label"] == GLOVE_LABEL]
         )
         roles = [(person, self._role(person, bats, gloves)) for person in people]
-        batter_boxes = [
-            person["box"] for person, role in roles if role == BATTER_ROLE
-        ] + [bat["box"] for bat in bats]
+        batters = [person for person, role in roles if role == BATTER_ROLE]
+        batter_boxes = [batter["box"] for batter in batters] + [
+            bat["box"] for bat in bats
+        ]
+        pose_payload = frameio.read_blobs(buf).get(POSE_BLOB)
+        poses = json.loads(pose_payload) if pose_payload is not None else []
+        batter_poses = [
+            pose
+            for pose in (pose_of(batter["box"], poses) for batter in batters)
+            if pose is not None
+        ]
         balls = [
             entry
             for entry in detected
@@ -351,6 +416,8 @@ class BaseballOverlay(InPlaceVideoTransform):
                 self._draw_ellipse(drawing, person["box"], rgba, person["track_id"])
                 if self.show_labels:
                     self._draw_label(drawing, person["box"], role, rgba)
+            for pose in batter_poses:
+                self._draw_pose(drawing, pose, ROLE_RGBA[BATTER_ROLE])
             if self.show_equipment:
                 for item in bats + gloves:
                     rgba = EQUIPMENT_RGBA[item["label"]]

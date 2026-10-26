@@ -101,7 +101,7 @@ def rgb(palette_row):
 
 
 def drawn_keypoints(persons):
-    from pose import DRAWN_KEYPOINT_CONFIDENCE
+    from utils.coco_pose import DRAWN_KEYPOINT_CONFIDENCE
 
     for person in persons:
         seen = [
