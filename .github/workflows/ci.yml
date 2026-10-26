@@ -46,7 +46,8 @@ jobs:
   # each leg installs one engine's extra so their pins never have to agree
   engines:
     needs: lint
-    runs-on: ubuntu-latest
+    # tensorflow, executorch and tensorflow-text have no wheel for 26.04's system python 3.14
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
