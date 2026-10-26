@@ -28,8 +28,10 @@ def gstanalytics_importable():
 
 
 def relation_meta_analytics():
+    from backend.gst.detection_copy_patch import keep_detections_on_buffer_copy
     from backend.gst.relation_meta import RelationMetaAnalytics
 
+    keep_detections_on_buffer_copy()
     return RelationMetaAnalytics()
 
 
