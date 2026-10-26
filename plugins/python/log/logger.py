@@ -33,7 +33,7 @@ class PythonLogger(Logger):
     """Logger implementation using Python logging."""
 
     def __init__(self):
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.WARNING)
 
     def error(self, message, *args):
         logging.error(message % args if args else message)
