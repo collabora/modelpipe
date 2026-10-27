@@ -185,7 +185,6 @@ jobs:
                 libgirepository-2.0-dev \
                 libglib2.0-dev \
                 python3-dev
-              pip install numpy opencv-python-headless ultralytics onnxruntime
           - os: macos-latest
             gst-install: |
               brew install gstreamer cairo pkg-config pygobject3 gobject-introspection
