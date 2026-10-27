@@ -261,10 +261,10 @@ jobs:
           source .venv/bin/activate
           VENV_SITE=$(python -c "import site; print(site.getsitepackages()[0])")
           # libgstpython.so uses system Python which needs:
-          # - /usr/lib/python3/dist-packages for gi (python3-gi apt package)
           # - venv site-packages for pip-installed ML packages
+          # - /usr/lib/python3/dist-packages for gi (python3-gi apt package)
           # - plugins/python for our GStreamer element modules
-          export PYTHONPATH="/usr/lib/python3/dist-packages:${VENV_SITE}:${{ github.workspace }}/plugins/python"
+          export PYTHONPATH="${VENV_SITE}:/usr/lib/python3/dist-packages:${{ github.workspace }}/plugins/python"
           export GST_PLUGIN_PATH=${{ github.workspace }}/plugins
           # Prevent hostedtoolcache libpython from shadowing system libpython
           unset LD_LIBRARY_PATH
@@ -368,7 +368,7 @@ jobs:
           source .venv/bin/activate
           pip install onnxruntime
           VENV_SITE=$(python -c "import site; print(site.getsitepackages()[0])")
-          export PYTHONPATH="/usr/lib/python3/dist-packages:${VENV_SITE}:${{ github.workspace }}/plugins/python"
+          export PYTHONPATH="${VENV_SITE}:/usr/lib/python3/dist-packages:${{ github.workspace }}/plugins/python"
           export GST_PLUGIN_PATH=${{ github.workspace }}/plugins
           unset LD_LIBRARY_PATH
           rm -rf ~/.cache/gstreamer-1.0
