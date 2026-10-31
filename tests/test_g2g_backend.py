@@ -38,6 +38,7 @@ from backend import (
     analytics,
     BaseAggregator,
     VideoTransform,
+    CUDA_INFERENCE_FRAME_CAPABILITIES,
 )  # noqa: E402
 
 
@@ -1051,6 +1052,8 @@ def test_a_cuda_frame_reaches_process_frames_as_an_rgb_tensor_on_the_device():
     from backend.g2g.cuda_frames import nv12_to_rgb
 
     class RecordFrame(VideoTransform):
+        FRAME_CAPABILITIES = CUDA_INFERENCE_FRAME_CAPABILITIES
+
         def process_frames(self, frames, num_sources, fmt, target):
             self.received = frames, num_sources, fmt
             meta = analytics.add_relation_meta(target)
@@ -1915,6 +1918,7 @@ TTS_SAMPLES = 8000
 
 def tts_leaf():
     """A real `BaseTts` whose voice is a ramp of the right sample count."""
+    pytest.importorskip("soundfile", reason="BaseTts encodes the voice with it")
     driver = gst_payload_driver()
     from base_tts import BaseTts
 
