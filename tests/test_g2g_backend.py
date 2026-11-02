@@ -463,6 +463,29 @@ def test_only_on_detections_keys_on_the_upstream_objects():
     )
 
 
+def test_object_detector_runs_only_inside_its_frame_range():
+    from base_objectdetector import BaseObjectDetector
+
+    class RecordFrames(BaseObjectDetector):
+        def do_forward(self, frames):
+            detected.append(int(frames.flat[0]))
+            return {}
+
+        def do_decode(self, target, results, stream_idx=0):
+            pass
+
+    detected = []
+    detector = RecordFrames()
+    detector.engine_name = None
+    detector.first_frame = 2
+    detector.last_frame = 4
+    width, height = 4, 3
+    for frame_number in range(7):
+        frame = bytearray([frame_number] * (width * height * 3))
+        detector.g2g_process(frame, width, height, "RGB", StubMetaSink())
+    assert detected == [2, 3, 4]
+
+
 def test_video_transform_g2g_process_end_to_end():
     """A VideoTransform subclass inverts the frame and stages one detection,
     driven exactly as the host drives it: instance.g2g_process(buf, w, h, fmt, sink)."""

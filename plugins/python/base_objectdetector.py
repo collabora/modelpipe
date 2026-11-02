@@ -10,6 +10,8 @@ from utils.format_converter import FormatConverter
 from backend import analytics, GObject
 from tasks.object_detector import ObjectDetectorTask
 
+LAST_FRAME_DEFAULT = 2**31 - 1
+
 
 class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
     """
@@ -28,6 +30,9 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         self.logger.info("Initialized BaseObjectDetector")
         self.__track = False
         self.__interval = 1
+        self.__first_frame = 0
+        self.__last_frame = LAST_FRAME_DEFAULT
+        self._frame_number = 0
         self._det_counter = 0
         self._cached_results = None
         self._cached_num_sources = 1
@@ -54,6 +59,39 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
     def interval(self, value):
         self.__interval = max(1, int(value))
 
+    @GObject.Property(
+        type=int,
+        default=0,
+        minimum=0,
+        maximum=LAST_FRAME_DEFAULT,
+        nick="First Frame",
+        blurb="First frame, counted from zero, to run detection on",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    def first_frame(self):
+        return self.__first_frame
+
+    @first_frame.setter
+    def first_frame(self, value):
+        self.__first_frame = value
+
+    @GObject.Property(
+        type=int,
+        default=LAST_FRAME_DEFAULT,
+        minimum=0,
+        maximum=LAST_FRAME_DEFAULT,
+        nick="Last Frame",
+        blurb="Last frame, counted from zero, to run detection on. Frames "
+        "outside first-frame to last-frame pass through with no detections.",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+    def last_frame(self):
+        return self.__last_frame
+
+    @last_frame.setter
+    def last_frame(self, value):
+        self.__last_frame = value
+
     @GObject.Property(type=str, default="30/1")
     def framerate(self):
         "Source framerate as 'num/denom', used for muxed-stream frame timing"
@@ -78,6 +116,10 @@ class BaseObjectDetector(VideoTransform, ObjectDetectorTask):
         every backend. Raises on a hard failure; the driver maps that to its own
         error return.
         """
+        frame_number = self._frame_number
+        self._frame_number += 1
+        if not self.__first_frame <= frame_number <= self.__last_frame:
+            return
         run_detect = (self._det_counter % self.__interval) == 0
         self._det_counter += 1
 
