@@ -38,6 +38,13 @@ ENGINE_TUNABLES = (
         "Priority of the CUDA stream the inference runs on, lower is more urgent "
         "as in CUDA, clamped to the range the device allows",
     ),
+    (
+        "precision",
+        str,
+        "fp32",
+        "Inference precision, fp32 or fp16. Loading the model fails on an engine "
+        "that does not run the requested precision",
+    ),
 )
 
 
@@ -282,6 +289,7 @@ class MLEngineMixin:
         self._frame_stride = 1
         self._model_name = None
         self._stream_priority = 0
+        self._precision = "fp32"
         self._system_prompt = None
         self._prompt = None
         self._compile = False
@@ -312,6 +320,7 @@ class MLEngineMixin:
             self.engine.batch_size = self._batch_size
             self.engine.frame_stride = self._frame_stride
             self.engine.stream_priority = self._stream_priority
+            self.engine.precision = self._precision
             # an engine like drpai starts with a layout of its own
             if self._input_format != ENGINE_CHOOSES:
                 self.engine.input_format = self._input_format

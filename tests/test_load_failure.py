@@ -250,3 +250,32 @@ def test_a_device_the_engine_refuses_fails_the_pipeline_with_the_cause(propertie
     assert message.type == Gst.MessageType.ERROR, "the pipeline ran on another device"
     error, _ = message.parse_error()
     assert DEVICE_REFUSAL in error.message
+
+
+class HalfPrecisionEngine(WorkingEngine):
+    PRECISIONS = ("fp32", "fp16")
+
+
+HALF_PRECISION_ENGINE = "test_half_precision_engine"
+
+
+def test_a_precision_the_engine_does_not_run_fails_the_load_naming_it():
+    element = LoadWorks()
+    element.set_property("model-name", LOADABLE_MODEL_NAME)
+    element.set_property("precision", "fp16")
+
+    with pytest.raises(ValueError, match="WorkingEngine runs fp32, not precision=fp16"):
+        element.do_load_model()
+    assert element.engine.model is None
+
+
+def test_an_engine_that_runs_the_precision_loads_with_it():
+    element = LoadWorks()
+    EngineFactory.register(HALF_PRECISION_ENGINE, HalfPrecisionEngine)
+    element.mgr.engine_name = HALF_PRECISION_ENGINE
+    element.set_property("model-name", LOADABLE_MODEL_NAME)
+    element.set_property("precision", "fp16")
+
+    element.do_load_model()
+    assert element.engine.model == LOADABLE_MODEL_NAME
+    assert element.engine.precision == "fp16"

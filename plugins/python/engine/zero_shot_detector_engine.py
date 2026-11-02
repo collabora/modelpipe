@@ -183,6 +183,9 @@ class ExportedZeroShotDetector:
 
 
 class ZeroShotDetectorEngine(PyTorchEngine):
+    PRECISIONS = ("fp32", "fp16")
+    TORCH_DTYPE_NAMES = {"fp32": "float32", "fp16": "float16"}
+
     def __init__(self):
         super().__init__()
         self.labels = []
@@ -213,6 +216,9 @@ class ZeroShotDetectorEngine(PyTorchEngine):
             raise ValueError("no labels set for zero-shot detection")
         if self.model is None or self.image_processor is None:
             raise ValueError("zero-shot detection model is not loaded")
+        dtype = getattr(torch, self.TORCH_DTYPE_NAMES[self.precision])
+        if self.model.dtype != dtype:
+            self.model.to(dtype)
 
         is_batch = isinstance(frames, np.ndarray) and frames.ndim == 4
         batch = frames if is_batch else np.expand_dims(frames, 0)
@@ -225,6 +231,7 @@ class ZeroShotDetectorEngine(PyTorchEngine):
             return_tensors="pt",
             padding=True,
         ).to(self.device)
+        inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
 
         with torch.no_grad():
             outputs = self.model(**inputs)

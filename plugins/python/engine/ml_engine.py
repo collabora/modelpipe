@@ -48,6 +48,8 @@ class MLEngine(ABC):
     """Abstract base class for machine learning engines that load models, run inference on image frames,
     and generate text with language models."""
 
+    PRECISIONS = ("fp32",)
+
     def __init__(self):
         self.logger = LoggerFactory.get(LoggerFactory.LOGGER_TYPE_GST)
         self.device = None
@@ -62,6 +64,7 @@ class MLEngine(ABC):
         self.frame_stride = None
         self.counter = 0
         self.stream_priority = 0
+        self.precision = "fp32"
         self.track = False
         self.prompt = "What is shown in this image?"  # Default prompt
         self.input_format = "auto"  # "auto", "nhwc", "nchw"

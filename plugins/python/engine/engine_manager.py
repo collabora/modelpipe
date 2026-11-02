@@ -52,6 +52,12 @@ class EngineManager:
                 f"Stack trace:\n{''.join(stack_trace)}"  # Join and log the stack trace
             )
             return False
+        if self.engine.precision not in self.engine.PRECISIONS:
+            raise ValueError(
+                f"{type(self.engine).__name__} runs "
+                f"{', '.join(self.engine.PRECISIONS)}, not precision="
+                f"{self.engine.precision}"
+            )
         try:
             self.logger.info(f"Loading model: {model_name}")
             self.engine.do_load_model(model_name, **kwargs)
