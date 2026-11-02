@@ -58,8 +58,10 @@ class StubMetaSink:
         upstream_class_names=(),
         upstream_tracking_ids=(),
         text_output=False,
+        framerate=None,
     ):
         self.text_output = text_output
+        self.framerate = framerate
         self.emitted_outputs = []
         self.staged = []
         self.relations = []

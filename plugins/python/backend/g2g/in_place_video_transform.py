@@ -26,6 +26,7 @@ class InPlaceVideoTransform:
         self.width = 0
         self.height = 0
         self.format = None
+        self.framerate = None
 
     def g2g_properties(self):
         return declared_property_names(type(self))
@@ -34,6 +35,7 @@ class InPlaceVideoTransform:
         self.width = width
         self.height = height
         self.format = (fmt or "RGB").upper()
+        self.framerate = sink.framerate
         frameio.bind(sink, fmt)
         analytics.bind(sink)
         frame = None
@@ -48,6 +50,7 @@ class InPlaceVideoTransform:
         self.width = width
         self.height = height
         self.format = DEVICE_DRAWING_FORMAT
+        self.framerate = sink.framerate
         frameio.bind(sink, self.format)
         analytics.bind(sink)
         if not self.FRAME_CAPABILITIES.reads_pixels:

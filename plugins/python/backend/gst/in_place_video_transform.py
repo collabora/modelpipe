@@ -72,6 +72,7 @@ class InPlaceVideoTransform(GstBase.BaseTransform):
         self.width = 0
         self.height = 0
         self.format = None
+        self.framerate = None
         self._bytes_per_pixel = 0
 
     def do_set_caps(self, incaps, outcaps):
@@ -79,6 +80,8 @@ class InPlaceVideoTransform(GstBase.BaseTransform):
         self.width = info.width
         self.height = info.height
         self.format = info.finfo.name
+        # gstreamer marks a variable framerate with a zero numerator
+        self.framerate = (info.fps_n, info.fps_d) if info.fps_n else None
         self._bytes_per_pixel = info.finfo.pixel_stride[0]
         return True
 
