@@ -408,8 +408,8 @@ def test_an_element_reading_device_frames_takes_them_straight_from_nvdec(shells)
             "filesrc location=data/people.mp4 ! qtdemux ! h264parse ! nvdec "
             "! pyelement module=yolo class=YOLOTransform cuda-frames=true "
             "format=NV12 model-name=yolo11n device=cuda "
-            "! videoconvert ! pyelement module=tracker class=TrackerTransform "
-            "! analyticsoverlay ! fakesink"
+            "! wgpucolorconvert ! wgpudownload ! pyelement module=tracker "
+            "class=TrackerTransform ! analyticsoverlay ! fakesink"
         ).split()
     )
 
@@ -456,6 +456,25 @@ def test_the_overlay_on_cuda_frames_draws_on_the_gpu(shells):
 def test_a_converter_after_nvdec_keeps_the_element_on_system_memory(shells):
     pipeline = "nvdec ! videoconvert ! mp_yolo device=cuda".split()
     assert "cuda-frames=true" not in mp_launch.rewrite_for_g2g(pipeline, shells)
+
+
+def test_a_download_to_rgba_after_nvdec_converts_on_the_gpu(shells):
+    pipeline = (
+        "nvh264dec ! cudaconvert ! cudadownload ! videoconvert "
+        "! video/x-raw,format=RGBA ! fakesink"
+    )
+    assert (
+        mp_launch.rewrite_for_g2g(pipeline.split(), shells)
+        == (
+            "nvh264dec ! wgpucolorconvert ! wgpudownload "
+            "! video/x-raw,format=RGBA ! fakesink"
+        ).split()
+    )
+
+
+def test_a_download_to_another_format_after_nvdec_stays_on_the_cpu(shells):
+    pipeline = "nvdec ! videoconvert ! video/x-raw,format=I420 ! x264enc".split()
+    assert mp_launch.rewrite_for_g2g(pipeline, shells) == pipeline
 
 
 def test_an_element_reading_host_frames_takes_no_cuda_frames_after_nvdec(shells):

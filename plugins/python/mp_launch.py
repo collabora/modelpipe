@@ -180,6 +180,10 @@ FORMAT_PROPERTIES = {
 CUDA_CONVERTERS = ("cudaconvert", "cudascale", "cudaconvertscale")
 CUDA_MEMORY_FEATURE = "memory:CUDAMemory"
 
+# wgpucolorconvert takes 1 ms a frame where videoconvert takes 4 ms on 720p NV12
+DOWNLOADING_CONVERTERS = ("cudadownload", "videoconvert")
+CUDA_TO_SYSTEM_RGBA = ["wgpucolorconvert", SEPARATOR, "wgpudownload"]
+
 
 class ElementShell(NamedTuple):
     """What hosting one ModelPipe element on g2g takes: the module and class
@@ -390,7 +394,10 @@ def rewrite_for_g2g(argv, shells):
     upstream_on_cuda = False
     parts = list(segments(joined_assignments(argv)))
     fan_in = fan_in_names(parts)
-    for segment in parts:
+    index = -1
+    while index + 1 < len(parts):
+        index += 1
+        segment = parts[index]
         # Separators and references are carried through where they were
         # written: which chains link to which is the caller's, not ours.
         if segment == [SEPARATOR]:
@@ -400,10 +407,18 @@ def rewrite_for_g2g(argv, shells):
             rewritten.extend(segment)
             upstream_on_cuda = False
             continue
-        # g2g has no GPU scaler or RGBA conversion, the element takes nvdec's frame
+        # g2g has no GPU scaler, the element takes nvdec's frame
         if upstream_on_cuda and converts_cuda_frames(segment):
             rewritten.pop()
             continue
+        if upstream_on_cuda and segment[0] in DOWNLOADING_CONVERTERS:
+            consumer = first_after_converters(parts, index)
+            if consumer is not None and takes_system_rgba(parts[consumer], shells):
+                rewritten.extend(CUDA_TO_SYSTEM_RGBA)
+                raw_format = G2G_RAW_VIDEO_FORMAT
+                upstream_on_cuda = False
+                index = consumer - 2
+                continue
         host = PY_AGGREGATOR if declared_name(segment) in fan_in else PY_ELEMENT
         translated = rewrite_segment(
             segment, shells, raw_format, host, upstream_on_cuda
@@ -447,6 +462,27 @@ def converts_cuda_frames(segment):
         return CUDA_MEMORY_FEATURE in "".join(segment)
     caps = next((p for p in segment[1:] if p.startswith("caps=")), "")
     return head == "capsfilter" and CUDA_MEMORY_FEATURE in caps
+
+
+def first_after_converters(parts, index):
+    for later in range(index + 1, len(parts)):
+        if parts[later] == [SEPARATOR] or parts[later][0] in DOWNLOADING_CONVERTERS:
+            continue
+        return later
+    return None
+
+
+def takes_system_rgba(segment, shells):
+    head = segment[0]
+    if "/" in head:
+        caps = with_pinned_format("".join(segment))
+        return (
+            CUDA_MEMORY_FEATURE not in caps
+            and raw_video_format(caps) == G2G_RAW_VIDEO_FORMAT
+        )
+    shell = shells.get(head)
+    names_format = any(token.startswith("format=") for token in segment[1:])
+    return shell is not None and not shell.is_sink and not names_format
 
 
 def declared_name(segment):
