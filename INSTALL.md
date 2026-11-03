@@ -41,11 +41,15 @@ sudo dnf install -y python3-pip \
 
 1. Install Python 3.10 or later. JetPack 6 ships 3.10; the `jax` extras need 3.11.
 
-2. Make a venv and install GStreamer and its Python bindings from the
-   GStreamer project's wheels. The venv's `python`, `gst-launch-1.0` and
-   `gst-inspect-1.0` find the GStreamer libraries on their own.
+2. Clone the repo, make a venv in it and install GStreamer and its Python
+   bindings from the GStreamer project's wheels. The wheels include GStreamer
+   itself, so skip the GStreamer installer. The venv's `python`,
+   `gst-launch-1.0` and `gst-inspect-1.0` find the GStreamer libraries on
+   their own.
 
 ```powershell
+git clone https://github.com/collabora/modelpipe.git
+cd modelpipe
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install "gstreamer-meta[cli]"
@@ -435,6 +439,14 @@ Set both `GST_PLUGIN_PATH` (so GStreamer discovers your `.py` files) and `PYTHON
 ```bash
 export GST_PLUGIN_PATH=$HOME/src/modelpipe/plugins:$HOME/my_plugins:$GST_PLUGIN_PATH
 export PYTHONPATH=$HOME/my_plugins/python:$PYTHONPATH
+```
+
+On Windows, add to the environment from the Windows install steps. The variable
+is `GST_PLUGIN_PATH_1_0` and the separator is `;`:
+
+```powershell
+$env:GST_PLUGIN_PATH_1_0 = "$PWD\plugins;$HOME\my_plugins"
+$env:PYTHONPATH = "$HOME\my_plugins\python;$env:PYTHONPATH"
 ```
 
 The loader adds only the first `python/` directory it finds to `sys.path`, so list
