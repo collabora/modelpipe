@@ -7725,9 +7725,20 @@ wheels = [
 
 [[package]]
 name = "pysilero-vad"
-version = "3.3.0"
+version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d6/f5/9be84ec8bcbe77d798a86a5fde518d257bd997a2465c8a4704241094a495/pysilero_vad-3.3.0.tar.gz", hash = "sha256:b9f2a423a137e9bc6d5a0e638ca76e1f750baa3a1eed60153995d1c280b1316f", size = 2400143, upload-time = "2026-02-09T22:16:16.775Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/92/16da34eea1443015b00e847d534959f034a1150776d5421b57b43c5b43f9/pysilero_vad-3.4.0.tar.gz", hash = "sha256:0a4937065ab0f8e49aafe5e503f67656525a32c5401002ffe8098a87e00bb657", size = 2402347, upload-time = "2026-07-07T16:52:46.214Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/67/1a955474cbd62649985a0a4118cdd9e1b5cb7a9bfebfd069518c786b99e7/pysilero_vad-3.4.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:cb0ea55f2adb53958afbb41d3ea665a73be6091e20a8d368a3b8cc83c20bb2b4", size = 2391783, upload-time = "2026-07-07T16:52:31.839Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b6/23be281be2174be4d1790de5c7d93795fd6e51f71ba7dae7fe37e68c87ef/pysilero_vad-3.4.0-cp39-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fa1ee7f9c57852c94bda936540fcb1aa379b9767fe6950c4f12a19a2117ea589", size = 3378443, upload-time = "2026-07-07T16:52:33.638Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/00/bd26149376b763ca15f0c8697a9e124628f177132fb9c5110f6b0d5fa8fd/pysilero_vad-3.4.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:6c9a5a3ffb57915058a57a0807dda888bb5294ea99776fc12014f002e6f1439c", size = 4519422, upload-time = "2026-07-07T16:52:35.584Z" },
+    { url = "https://files.pythonhosted.org/packages/75/51/aca86517a81dc68c8749625607726a8610650bb6b52dfe548a7c31abfb5c/pysilero_vad-3.4.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:71306d5e6f2d9a72be90fdc37c7f95cfacdec12c340464a6d672aebc97d55195", size = 5011142, upload-time = "2026-07-07T16:52:37.366Z" },
+    { url = "https://files.pythonhosted.org/packages/12/55/7606b9ef714d3a3309848ece14e96c9f06eb1652c11e423aa10e3ce7735e/pysilero_vad-3.4.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:fd5efc1cad841055ed3141bbfa94ecb49e9fbb1c2b156dd96a6fa25133c17a62", size = 3563769, upload-time = "2026-07-07T16:52:38.911Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/7a/264ef9b5f599d82852157be1226dbd4e4164b3ea91e8724fcd145e40439a/pysilero_vad-3.4.0-cp39-abi3-musllinux_1_2_i686.whl", hash = "sha256:39e5f6cb0b0791f36dabb4149ad917de719be9f3a045597a0fbe58767efe2bd3", size = 4172104, upload-time = "2026-07-07T16:52:40.455Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/94/64d2d541c8875d940a30624a63c94b2a987de54a1bc48a7197f3255e7db3/pysilero_vad-3.4.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:579b8879f3d2a6bea24f510cb9ca7b367b068a36deac8157eff978c82a445cdc", size = 3832076, upload-time = "2026-07-07T16:52:41.834Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/46/7b64f2d160888224ed7beee70ef1893caf4783ad9481f621d732847d958e/pysilero_vad-3.4.0-cp39-abi3-win32.whl", hash = "sha256:bd8825fa6ad657eba299950d0fc84d34fab8fa30b95cad455b5a5c1ce11f42f7", size = 1654347, upload-time = "2026-07-07T16:52:43.359Z" },
+    { url = "https://files.pythonhosted.org/packages/be/10/128ba35aac0dee2c21a2936df20fcae49b6db5fe94c27af4b32fa11e8fc7/pysilero_vad-3.4.0-cp39-abi3-win_amd64.whl", hash = "sha256:d5b422c2e7f13eb22ecd0a2b38eb55080f02f88b64aed4ec65e8a3089090fc4b", size = 1828685, upload-time = "2026-07-07T16:52:44.743Z" },
+]
 
 [[package]]
 name = "pytest"
