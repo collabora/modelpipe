@@ -98,6 +98,13 @@ The Windows GStreamer packages have no Vulkan plugin, so `mp_cudatovulkan` and
 the Vulkan overlay are Linux only. Show video with `autovideosink` or
 `d3d12videosink`.
 
+The packages have no `tsdemux` either. Remux MPEG-TS files to MP4 with
+`ffmpeg -i in.ts -c copy out.mp4` and read them with `qtdemux`.
+
+`gst-launch-1.0` treats a backslash in a pipeline string as an escape, so
+`filesrc location=C:\videos\in.mp4` fails with "Resource not found". Write
+`location=C:/videos/in.mp4`.
+
 ### Manage Python packages
 
 #### Python version
