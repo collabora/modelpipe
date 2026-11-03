@@ -135,18 +135,25 @@ sudo apt install -y python3-pip python3-venv \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-base-apps \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gir1.2-gst-plugins-bad-1.0 python3-gst-1.0 gstreamer1.0-python3-plugin-loader \
-    libcairo2 libcairo2-dev git
+    python3-gi-cairo libcairo2 libcairo2-dev git
 ```
 
 Then a venv on the system Python, which is the one GStreamer's plugin loader
-embeds. `uv sync` installs PyTorch, with CUDA on Linux, and the `yolo` extra
-adds the YOLO models the quick start uses.
+embeds. `uv sync` installs PyTorch, with CUDA on Linux. The `yolo` extra adds
+the YOLO models the quick start uses, and the `vad` extra adds the speech
+detection and Whisper runtime that `mp_whispertranscribe` needs.
+
+Ubuntu's gst-python is built against Ubuntu's pygobject, so `gi` and `cairo`
+come from apt, not from the venv. On Ubuntu 24.04 a venv pygobject crashes the
+plugin loader, and GStreamer then blacklists it. The plugin loader finds the
+venv's packages only while the venv is active.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/collabora/modelpipe.git && cd modelpipe
 uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra yolo
+uv sync --extra yolo --extra vad --no-install-package pygobject --no-install-package pycairo
+source .venv/bin/activate
 export GST_PLUGIN_PATH=$PWD/plugins:$GST_PLUGIN_PATH
 gst-inspect-1.0 python
 ```
@@ -173,10 +180,11 @@ python mp-launch.py filesrc location=data/people.mp4 ! decodebin ! videoconvert 
 ```
 
 Transcribe Korean speech and translate it to English. Transcripts are logged at
-GStreamer info level:
+GStreamer info level. Whisper runs on the CPU here, because the GPU needs CUDA 12
+libraries, see [INSTALL.md](INSTALL.md#feature-extras):
 
 ```
-GST_DEBUG=python:4 python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cuda language=ko translate=yes ! fakesink
+GST_DEBUG=python:4 python mp-launch.py filesrc location=data/air_traffic_korean_with_english.wav ! decodebin ! audioconvert ! mp_whispertranscribe device=cpu language=ko translate=yes ! fakesink
 ```
 
 Record a clip around every person detection:

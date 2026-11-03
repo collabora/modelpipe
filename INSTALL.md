@@ -13,7 +13,7 @@ sudo apt install -y python3-pip  python3-venv \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-base-apps \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gir1.2-gst-plugins-bad-1.0 python3-gst-1.0 gstreamer1.0-python3-plugin-loader \
-    libcairo2 libcairo2-dev git
+    python3-gi-cairo libcairo2 libcairo2-dev git
 ```
 
 #### Fedora
@@ -123,6 +123,10 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -e ".[yolo]"
 ```
 
+On Ubuntu, use uv instead. pip builds pygobject from source, which needs
+`libgirepository-2.0-dev` and `python3-dev`, and on Ubuntu 24.04 the venv's
+pygobject crashes the plugin loader.
+
 #### With uv
 
 Point uv at the system Python, not a downloaded one:
@@ -133,6 +137,11 @@ uv venv --python /usr/bin/python3 --system-site-packages
 source .venv/bin/activate
 uv sync --extra yolo
 ```
+
+On Ubuntu, add `--no-install-package pygobject --no-install-package pycairo` to
+every `uv sync`, as in the [README](README.md#install). A plain `uv sync` puts
+them back in the venv. The plugin loader finds the venv's packages only while
+the venv is active.
 
 Do not pre-install torch from the PyTorch index here. `uv sync` resolves torch from
 `uv.lock`, which on Linux already pulls the CUDA wheels, and replaces whatever was
@@ -154,11 +163,26 @@ what most elements need. Each extra adds the packages for a group of elements:
 - `kafka`: `mp_kafkasink`
 - `mqtt`: `mp_alert` with `mqtt-broker=` set
 - `mcp`: the MCP server
-- `vad`: `mp_vad`
+- `vad`: `mp_vad`, `mp_whispertranscribe`, `mp_whisperlive`
 
 ```
 uv sync --extra yolo --extra audio
 ```
+
+`mp_whispertranscribe` and `mp_whisperlive` run Whisper with faster-whisper,
+whose ctranslate2 wheels are built against CUDA 12. The torch in `uv.lock` brings
+only CUDA 13 libraries, so `device=cuda` fails with `Library libcublas.so.12 is
+not found or cannot be loaded`. `device=cpu` works without CUDA 12. For the GPU,
+install NVIDIA's CUDA 12 cuBLAS wheel outside the venv, where `uv sync` leaves it
+alone, and put it on the library path:
+
+```
+uv pip install --python .venv/bin/python --target ~/cuda12-libs nvidia-cublas-cu12
+export LD_LIBRARY_PATH=$HOME/cuda12-libs/nvidia/cublas/lib:$LD_LIBRARY_PATH
+```
+
+On an RTX 4090 the README's Korean transcription takes 3 s this way and 60 s on
+the CPU.
 
 `all` covers `yolo`, `llm`, `audio`, `diffusion`, `face`, `superres`, `kafka`, `mqtt`
 and `vad`, plus the ONNX, tinygrad, llama.cpp, OpenVINO, TensorFlow and LiteRT
