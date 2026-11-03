@@ -91,7 +91,8 @@ gst-inspect-1.0 cudaconvert
 ```
 
    GStreamer caches the element list in `.venv\Temp\gstreamer-1.0`. If
-   `cudaconvert` is missing after `PATH` changes, delete that directory.
+   `cudaconvert` is missing after `PATH` changes, or a new `.py` element in
+   `plugins\python` is missing, delete that directory.
 
 The Windows GStreamer packages have no Vulkan plugin, so `mp_cudatovulkan` and
 the Vulkan overlay are Linux only. Show video with `autovideosink` or
