@@ -6,6 +6,8 @@ silently dropping out of the map.
 """
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -786,3 +788,21 @@ def test_an_element_read_from_twice_is_not_a_muxer(shells):
     rewritten = mp_launch.rewrite_for_g2g(pipeline, shells)
     assert "pyelement" in rewritten
     assert "pyaggregator" not in rewritten
+
+
+def test_launch_exits_with_the_backend_exit_code():
+    if not shutil.which("gst-launch-1.0"):
+        pytest.skip("needs gst-launch-1.0")
+    plugins = Path(mp_launch.__file__).parent
+    # the console script mp-launch runs sys.exit(modelpipe.launch())
+    entry_point = (
+        f"import sys; sys.path.insert(0, {str(plugins)!r}); "
+        "import modelpipe; sys.exit(modelpipe.launch())"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", entry_point, "fakesrc", "!", "no_such_element"],
+        env={**os.environ, "MP_BACKEND": "gst"},
+        capture_output=True,
+        timeout=120,
+    )
+    assert result.returncode != 0

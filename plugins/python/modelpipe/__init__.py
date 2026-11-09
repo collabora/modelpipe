@@ -11,7 +11,7 @@ if INSTALLED_ELEMENT_MODULES.is_dir():
 def launch():
     import mp_launch
 
-    mp_launch.main()
+    return mp_launch.main()
 
 
 def mcp():
