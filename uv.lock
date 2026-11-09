@@ -4230,6 +4230,7 @@ source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "huggingface-hub" },
+    { name = "jinja2" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin') or (python_full_version < '3.11' and sys_platform == 'darwin')" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin') or (python_full_version >= '3.11' and sys_platform == 'darwin')" },
     { name = "opencv-python-headless" },
@@ -4481,6 +4482,7 @@ requires-dist = [
     { name = "jax", extras = ["cpu"], marker = "extra == 'jax-cpu'" },
     { name = "jax", extras = ["cuda12"], marker = "extra == 'jax-gpu'" },
     { name = "jax", extras = ["tpu"], marker = "extra == 'jax-tpu'" },
+    { name = "jinja2", specifier = ">=3.1.6" },
     { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-cpu'", specifier = ">=0.32" },
     { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-gpu'", specifier = ">=0.32" },
     { name = "keras-hub", marker = "python_full_version >= '3.11' and extra == 'jax-tpu'", specifier = ">=0.32" },
