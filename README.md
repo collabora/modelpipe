@@ -145,8 +145,10 @@ detection and Whisper runtime that `mp_whispertranscribe` needs.
 
 Ubuntu's gst-python is built against Ubuntu's pygobject, so `gi` and `cairo`
 come from apt, not from the venv. On Ubuntu 24.04 a venv pygobject crashes the
-plugin loader, and GStreamer then blacklists it. The plugin loader finds the
-venv's packages only while the venv is active.
+plugin loader, and GStreamer then blacklists it. The blacklist outlasts a fixed
+venv: `gst-inspect-1.0 -b` lists it, and `rm ~/.cache/gstreamer-1.0/registry.*.bin`
+clears it. The plugin loader finds the venv's packages only while the venv is
+active.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
