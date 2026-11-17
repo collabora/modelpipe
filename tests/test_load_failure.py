@@ -286,7 +286,12 @@ def test_an_element_module_imports_before_gstreamer_is_initialised():
 
     result = subprocess.run(
         [sys.executable, "-c", "import tracker"],
-        env={**os.environ, "MP_BACKEND": "gst", "PYTHONPATH": str(PLUGIN_DIR)},
+        env={
+            **os.environ,
+            "MP_BACKEND": "gst",
+            # windows ci finds gi through PYTHONPATH
+            "PYTHONPATH": os.pathsep.join([str(PLUGIN_DIR), *sys.path]),
+        },
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr.decode()
