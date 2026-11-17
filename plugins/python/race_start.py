@@ -37,7 +37,6 @@ RACE_AFTER_SECONDS = 10.0
 MINIMUM_RACE_AFTER = 0.5
 # races in the start model training clips last at least 18 s
 STARTS_APART_SECONDS = 20.0
-WINDOW_CLOSES_SECONDS = 45.0
 # candidates are found about 1.3 s after their center and look back 1.5 s
 WINDOW_FRAMES_KEPT_SECONDS = 5.0
 STATES_KEPT_SECONDS = 15.0
@@ -74,7 +73,8 @@ class RaceStart(InPlaceVideoTransform):
         "Race Start",
         "Filter/Analyzer/Video",
         "Finds race starts with frame classifiers and tags frames "
-        "from about 1.3 s to 45 s after each start with a race-window blob "
+        "from about 1.3 s after each start until the window closes with a "
+        "race-window blob "
         "carrying the start time, dropping the tags of a start that the next "
         "10 s of frames do not confirm",
         "Aaron Boxer <aaron.boxer@collabora.com>",
@@ -98,6 +98,16 @@ class RaceStart(InPlaceVideoTransform):
         nick="Window Model",
         blurb="torchvision classifier of frames before and after the start, "
         "with an after class",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    window_closes_seconds = GObject.Property(
+        type=float,
+        default=45.0,
+        minimum=0.0,
+        nick="Window Closes Seconds",
+        blurb="Seconds after the start when the race window closes, longer than "
+        "the slowest race",
         flags=GObject.ParamFlags.READWRITE,
     )
 
@@ -256,7 +266,7 @@ class RaceStart(InPlaceVideoTransform):
         if (
             self._starts
             and self._frame
-            < self._starts[-1] + WINDOW_CLOSES_SECONDS * frames_per_second
+            < self._starts[-1] + self.window_closes_seconds * frames_per_second
         ):
             self._tag(buf, self._starts[-1], frames_per_second)
             self._states, self._pending, self._best_rise = [], [], None
@@ -276,7 +286,7 @@ class RaceStart(InPlaceVideoTransform):
             self._starts[-1]
             if self._starts
             and self._frame
-            < self._starts[-1] + WINDOW_CLOSES_SECONDS * frames_per_second
+            < self._starts[-1] + self.window_closes_seconds * frames_per_second
             else self._provisional_start(frames_per_second)
         )
         if tagged_start is not None:

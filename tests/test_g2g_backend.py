@@ -2688,7 +2688,13 @@ def test_racer_number_tracker_ignores_the_cloth_of_a_box_at_the_frame_edge():
 
 
 def tagged_race_starts(
-    monkeypatch, tmp_path, race_running_samples, frame_count, start_frame
+    monkeypatch,
+    tmp_path,
+    race_running_samples,
+    frame_count,
+    start_frame,
+    *,
+    window_closes_seconds,
 ):
     import race_start
     from race_start import RaceStart, STATE_INTERVAL_FRAMES
@@ -2713,6 +2719,7 @@ def tagged_race_starts(
     element = RaceStart()
     element.state_model = paths["state"]
     element.window_model = paths["window"]
+    element.window_closes_seconds = window_closes_seconds
     scene, _ = textures()
     gray = panned_view(scene, 0).astype(np.uint8)
     pixels = np.dstack([gray, gray, gray, np.full_like(gray, 255)])
@@ -2736,7 +2743,12 @@ def test_race_start_tags_frames_from_soon_after_the_start_until_the_window_close
     start_frame = 100
     confirmed_frame = start_frame + int(RACE_AFTER_SECONDS * FINISH_FRAMES_PER_SECOND)
     starts = tagged_race_starts(
-        monkeypatch, tmp_path, range(20, 1000), confirmed_frame + 20, start_frame
+        monkeypatch,
+        tmp_path,
+        range(20, 1000),
+        confirmed_frame + 20,
+        start_frame,
+        window_closes_seconds=45.0,
     )
     tagged = [frame for frame, tags in enumerate(starts) if tags]
     assert tagged[0] < confirmed_frame
@@ -2744,6 +2756,24 @@ def test_race_start_tags_frames_from_soon_after_the_start_until_the_window_close
     assert {tag for tags in starts for tag in tags} == {
         start_frame / FINISH_FRAMES_PER_SECOND
     }
+
+
+def test_race_start_stops_tagging_when_the_window_closes(monkeypatch, tmp_path):
+    from race_start import RACE_AFTER_SECONDS
+
+    start_frame = 100
+    window_closes_seconds = RACE_AFTER_SECONDS + 1.0
+    closed_frame = start_frame + int(window_closes_seconds * FINISH_FRAMES_PER_SECOND)
+    starts = tagged_race_starts(
+        monkeypatch,
+        tmp_path,
+        range(20, 1000),
+        closed_frame + 20,
+        start_frame,
+        window_closes_seconds=window_closes_seconds,
+    )
+    assert all(starts[closed_frame - 5 : closed_frame])
+    assert not any(starts[closed_frame:])
 
 
 def test_race_start_drops_the_tags_of_a_start_the_next_frames_do_not_confirm(
@@ -2754,7 +2784,12 @@ def test_race_start_drops_the_tags_of_a_start_the_next_frames_do_not_confirm(
     start_frame = 100
     confirmed_frame = start_frame + int(RACE_AFTER_SECONDS * FINISH_FRAMES_PER_SECOND)
     starts = tagged_race_starts(
-        monkeypatch, tmp_path, range(20, 30), confirmed_frame + 20, start_frame
+        monkeypatch,
+        tmp_path,
+        range(20, 30),
+        confirmed_frame + 20,
+        start_frame,
+        window_closes_seconds=45.0,
     )
     assert any(starts[:confirmed_frame])
     assert not any(starts[confirmed_frame:])
