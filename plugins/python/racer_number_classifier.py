@@ -21,10 +21,10 @@ from utils.blob_headers import (
 from utils.image_classifier import load_image_classifier
 
 NO_NUMBER_CLASS = "none"
-RACER_NUMBER_COUNT = 8
-RACER_NUMBER_CLASSES = [str(number) for number in range(1, RACER_NUMBER_COUNT + 1)] + [
-    NO_NUMBER_CLASS
-]
+
+
+def racer_number_classes(number_count):
+    return [str(number) for number in range(1, number_count + 1)] + [NO_NUMBER_CLASS]
 
 
 CLASSIFIER_DEVICE = "cuda:0"
@@ -36,8 +36,8 @@ class RacerNumberClassifier(InPlaceVideoTransform):
         "Filter/Analyzer/Video",
         "On frames carrying a race-window blob, classifies the number cloth "
         "colour of each racer box and writes a racer-number-probabilities blob "
-        "with the probability of racer numbers 1 to 8 and of no number for "
-        "each box",
+        "with the probability of each racer number of the model and of no "
+        "number for each box",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
@@ -49,7 +49,7 @@ class RacerNumberClassifier(InPlaceVideoTransform):
         type=str,
         default="",
         nick="Model",
-        blurb="torchvision classifier of racer crops into racer numbers 1 to 8 "
+        blurb="torchvision classifier of racer crops into racer numbers 1 to N "
         "and none",
         flags=GObject.ParamFlags.READWRITE,
     )
@@ -71,7 +71,8 @@ class RacerNumberClassifier(InPlaceVideoTransform):
             if not self.model:
                 raise ValueError("set model")
             self._classifier = load_image_classifier(self.model, CLASSIFIER_DEVICE)
-            if self._classifier.classes != RACER_NUMBER_CLASSES:
+            classes = self._classifier.classes
+            if classes != racer_number_classes(len(classes) - 1):
                 raise ValueError(f"{self.model} classes {self._classifier.classes}")
         crops = [
             frame[

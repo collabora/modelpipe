@@ -2505,12 +2505,13 @@ def test_finish_line_timer_ignores_frames_outside_the_race_window(monkeypatch):
 NUMBER_FRAME_SIZE = 64
 
 
-def number_logits_of(**by_class):
-    from racer_number_classifier import RACER_NUMBER_CLASSES
+def number_logits_of(number_count=8, **by_class):
+    from racer_number_classifier import racer_number_classes
 
-    logits = [0.0] * len(RACER_NUMBER_CLASSES)
+    classes = racer_number_classes(number_count)
+    logits = [0.0] * len(classes)
     for name, logit in by_class.items():
-        logits[RACER_NUMBER_CLASSES.index(name.removeprefix("number_"))] = logit
+        logits[classes.index(name.removeprefix("number_"))] = logit
     return logits
 
 
@@ -2558,7 +2559,7 @@ def stub_classifiers(monkeypatch, tmp_path, networks):
     return paths
 
 
-def number_probabilities_blob(monkeypatch, tmp_path, logits):
+def number_probabilities_blob(monkeypatch, tmp_path, logits, classes):
     import racer_number_classifier
     from utils.blob_headers import RACER_NUMBER_PROBABILITIES_META_HEADER
 
@@ -2566,7 +2567,7 @@ def number_probabilities_blob(monkeypatch, tmp_path, logits):
     paths = stub_classifiers(
         monkeypatch,
         tmp_path,
-        {"numbers": (racer_number_classifier.RACER_NUMBER_CLASSES, [logits])},
+        {"numbers": (classes, [logits])},
     )
     model = paths["numbers"]
     classifier = racer_number_classifier.RacerNumberClassifier()
@@ -2601,10 +2602,13 @@ def number_probabilities_blob(monkeypatch, tmp_path, logits):
 def test_racer_number_classifier_writes_numbers_1_to_8_then_none_for_every_box(
     monkeypatch, tmp_path
 ):
+    from racer_number_classifier import racer_number_classes
+
     blob = number_probabilities_blob(
         monkeypatch,
         tmp_path,
         [number_logits_of(number_4=5.0), number_logits_of(none=5.0, number_1=2.0)],
+        racer_number_classes(8),
     )
     assert list(blob) == ["0", "1"]
     assert np.argmax(blob["0"]) == 3
@@ -2612,8 +2616,32 @@ def test_racer_number_classifier_writes_numbers_1_to_8_then_none_for_every_box(
     assert sum(blob["1"]) == pytest.approx(1.0)
 
 
-def number_reading(number, probability=0.9):
-    reading = [(1 - probability) / 8] * 9
+def test_racer_number_classifier_writes_as_many_numbers_as_the_model_has(
+    monkeypatch, tmp_path
+):
+    from racer_number_classifier import racer_number_classes
+
+    blob = number_probabilities_blob(
+        monkeypatch,
+        tmp_path,
+        [number_logits_of(12, number_12=5.0)],
+        racer_number_classes(12),
+    )
+    assert len(blob["0"]) == 13
+    assert np.argmax(blob["0"]) == 11
+
+
+def test_racer_number_classifier_refuses_a_model_without_numbers_then_none(
+    monkeypatch, tmp_path
+):
+    with pytest.raises(ValueError, match="classes"):
+        number_probabilities_blob(
+            monkeypatch, tmp_path, [[0.0, 0.0, 0.0]], ["1", "3", "none"]
+        )
+
+
+def number_reading(number, probability=0.9, number_count=8):
+    reading = [(1 - probability) / number_count] * (number_count + 1)
     reading[number - 1] = probability
     return reading
 
@@ -2679,6 +2707,11 @@ def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable
     unread = {"0": NO_NUMBER_READING, "1": NO_NUMBER_READING}
     numbered = slots.assign(1, 1.0, racers(12), unread, NUMBER_FRAME_WIDTH)
     assert {racer["y"]: number for racer, number in numbered} == {100: 3, 115: 5}
+
+
+def test_racer_number_tracker_gives_numbers_past_8_when_the_readings_have_them():
+    reading = number_reading(12, number_count=14)
+    assert numbers_of_racers_on_each_frame([[(10, reading)]]) == [{0: 12}]
 
 
 def test_racer_number_tracker_ignores_the_cloth_of_a_box_at_the_frame_edge():

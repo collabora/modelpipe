@@ -16,7 +16,6 @@ from backend import (
     InPlaceVideoTransform,
     METADATA_FRAME_CAPABILITIES,
 )
-from racer_number_classifier import RACER_NUMBER_COUNT
 from tracker import iou_batch, merge_covered_detections
 from utils.blob_headers import (
     RACE_WINDOW_BLOB_NAME,
@@ -52,11 +51,11 @@ class RacerNumberSlots:
         self._previous_boxes = []
         self._previous_evidence = []
 
-    def _position_scores(self, frame, box):
+    def _position_scores(self, frame, box, number_count):
         import numpy as np
 
         settings = self._settings
-        scores = np.full(RACER_NUMBER_COUNT, settings.unknown_position_score)
+        scores = np.full(number_count, settings.unknown_position_score)
         centre = np.array([box[0] + box[2] / 2, box[1] + box[3] / 2])
         for number, (last_box, last_frame) in self._last_seen.items():
             frames_since = frame - last_frame
@@ -75,17 +74,17 @@ class RacerNumberSlots:
             )
         return scores
 
-    def _number_evidence(self, frame, boxes, readings, frame_width):
+    def _number_evidence(self, frame, boxes, readings, frame_width, number_count):
         import numpy as np
         from scipy.optimize import linear_sum_assignment
 
         evidence = []
         for box, reading in zip(boxes, readings):
-            cloth_probabilities = np.array(reading[:RACER_NUMBER_COUNT])
+            cloth_probabilities = np.array(reading[:number_count])
             given_a_number = cloth_probabilities / max(cloth_probabilities.sum(), 1e-9)
             # number cloths on racers cut off by the frame edge read as other numbers
             cut_off = box[0] <= 0 or box[0] + box[2] >= frame_width
-            weight = 0.0 if cut_off else 1.0 - reading[RACER_NUMBER_COUNT]
+            weight = 0.0 if cut_off else 1.0 - reading[number_count]
             evidence.append((weight, np.log(np.maximum(given_a_number, 1e-3))))
         if self._previous_frame != frame - 1:
             return evidence
@@ -126,26 +125,28 @@ class RacerNumberSlots:
             )
         ]
         boxes = [[racer["x"], racer["y"], racer["w"], racer["h"]] for racer in racers]
+        readings = [number_probabilities[str(racer["ref"])] for racer in racers]
+        # readings end with the probability of no number
+        number_count = len(readings[0]) - 1
         evidence = self._number_evidence(
-            frame,
-            boxes,
-            [number_probabilities[str(racer["ref"])] for racer in racers],
-            frame_width,
+            frame, boxes, readings, frame_width, number_count
         )
         self._previous_frame = frame
         self._previous_boxes = boxes
         self._previous_evidence = evidence
         settings = self._settings
-        scores = np.zeros((len(racers), RACER_NUMBER_COUNT))
+        scores = np.zeros((len(racers), number_count))
         is_read = []
         for row, (box, (weight, log_probabilities)) in enumerate(zip(boxes, evidence)):
             is_read.append(weight >= settings.minimum_number_weight)
             number_scores = (
                 log_probabilities
                 if is_read[row]
-                else np.full(RACER_NUMBER_COUNT, np.log(1 / RACER_NUMBER_COUNT))
+                else np.full(number_count, np.log(1 / number_count))
             )
-            scores[row] = number_scores + self._position_scores(frame, box)
+            scores[row] = number_scores + self._position_scores(
+                frame, box, number_count
+            )
         rows, columns = linear_sum_assignment(scores, maximize=True)
         numbered = []
         for row, column in zip(rows, columns):
@@ -167,7 +168,7 @@ class RacerNumberTracker(InPlaceVideoTransform):
         "Racer Number Tracker",
         "Filter/Analyzer/Video",
         "On frames carrying a race-window blob, gives each racer box one of the "
-        "eight racer numbers from its number cloth readings on this and earlier "
+        "racer numbers from its number cloth readings on this and earlier "
         "frames and its distance from where each number was last seen, tags the "
         "box with the number as its track id and writes a racer-numbers blob",
         "Aaron Boxer <aaron.boxer@collabora.com>",
