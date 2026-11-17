@@ -193,9 +193,9 @@ def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
 
     assert result.returncode == 0, result.stderr
     # The shadow raises with this text, so it appears only if something imported gi.
-    assert NO_PYGOBJECT not in result.stderr, (
-        "an element reached for GStreamer at import time"
-    )
+    assert (
+        NO_PYGOBJECT not in result.stderr
+    ), "an element reached for GStreamer at import time"
 
 
 def test_every_element_module_imports_under_g2g_without_gst_init():
@@ -1976,9 +1976,9 @@ def test_gst_tts_stamps_its_own_duration_and_no_presentation_time():
     assert ret == Gst.FlowReturn.OK
     assert len(pushed) == 1
     assert len(buffer_bytes(pushed[0])) == TTS_SAMPLES * 2, "S16LE, one channel"
-    assert pushed[0].pts == Gst.CLOCK_TIME_NONE, (
-        "the text buffer's pts is not the audio's"
-    )
+    assert (
+        pushed[0].pts == Gst.CLOCK_TIME_NONE
+    ), "the text buffer's pts is not the audio's"
     assert pushed[0].dts == Gst.CLOCK_TIME_NONE
     assert pushed[0].duration == expected_tts_duration_ns()
     assert leaf.srcpad.push_count == 1, "this family has never used finish_buffer"
@@ -2237,12 +2237,12 @@ def baseball_ball_ring_drawn(ball_x, ball_y):
 def test_baseball_overlay_ignores_a_ball_on_the_batter_or_the_bat():
     pytest.importorskip("cv2")
     assert baseball_ball_ring_drawn(900, 100), "a ball in the open is drawn"
-    assert not baseball_ball_ring_drawn(BAT_BOX["x"] + 5, BAT_BOX["y"] + 5), (
-        "ball on the bat"
-    )
-    assert not baseball_ball_ring_drawn(BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200), (
-        "ball on the batter"
-    )
+    assert not baseball_ball_ring_drawn(
+        BAT_BOX["x"] + 5, BAT_BOX["y"] + 5
+    ), "ball on the bat"
+    assert not baseball_ball_ring_drawn(
+        BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200
+    ), "ball on the batter"
 
 
 def test_baseball_overlay_merges_the_parts_of_one_bat_into_one_box():
@@ -2433,9 +2433,7 @@ def test_finish_line_timer_times_each_numbered_racer(monkeypatch):
     by_number = frames[-1]["finish_line"]["crossing_seconds_by_racer_number"]
     assert by_number == {
         "1": pytest.approx(CROSSING_FRAME / FINISH_FRAMES_PER_SECOND, abs=0.002),
-        "2": pytest.approx(
-            second_crossing_frame / FINISH_FRAMES_PER_SECOND, abs=0.002
-        ),
+        "2": pytest.approx(second_crossing_frame / FINISH_FRAMES_PER_SECOND, abs=0.002),
     }
 
 
