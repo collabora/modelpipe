@@ -30,6 +30,15 @@ class RFDETRDetector(BaseObjectDetector):
         flags=GObject.ParamFlags.READWRITE,
     )
 
+    classes = GObject.Property(
+        type=str,
+        default="",
+        nick="Classes",
+        blurb="Comma-separated class names whose boxes are kept, every class "
+        "when empty",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
     def __init__(self):
         super().__init__()
         self.task_engine_name = self.mgr.engine_name = "mp_rfdetr_engine"
@@ -37,6 +46,7 @@ class RFDETRDetector(BaseObjectDetector):
 
     def do_forward(self, frames):
         self.task_engine.conf = self.confidence
+        self.task_engine.classes = set(filter(None, self.classes.split(",")))
         return super().do_forward(frames)
 
 
