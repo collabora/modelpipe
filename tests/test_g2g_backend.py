@@ -2273,7 +2273,7 @@ CROSSING_FRAME = (FINISH_X - LEADER_START_X) / LEADER_PIXELS_PER_FRAME
 
 
 def textures():
-    import cv2
+    cv2 = pytest.importorskip("cv2")
 
     rng = np.random.default_rng(0)
     half_shape = (FINISH_HEIGHT // 2, FINISH_WIDTH)
@@ -2306,6 +2306,8 @@ class StubLinePredictor:
 
 
 def finish_line_timer_with(monkeypatch, line_predictions):
+    pytest.importorskip("cv2")
+    pytest.importorskip("torch")
     from finish_line_timer import FinishLineTimer
     from utils import finish_line_model
 
@@ -2535,8 +2537,8 @@ class StubNetwork:
 
 
 def stub_classifiers(monkeypatch, tmp_path, networks):
-    import torch
-    import torchvision
+    torch = pytest.importorskip("torch")
+    torchvision = pytest.importorskip("torchvision")
 
     stubs, paths = {}, {}
     for name, (classes, logits_per_call) in networks.items():
@@ -2649,6 +2651,7 @@ NUMBER_FRAME_WIDTH = 640
 
 
 def numbers_of_racers_on_each_frame(frames):
+    pytest.importorskip("scipy")
     from racer_number_tracker import RacerNumberTracker
 
     tracker = RacerNumberTracker()
@@ -2691,6 +2694,7 @@ def test_racer_number_tracker_gives_a_number_to_one_box_on_a_frame():
 
 
 def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable():
+    pytest.importorskip("scipy")
     from racer_number_tracker import RacerNumberSlots
 
     def racers(x):
