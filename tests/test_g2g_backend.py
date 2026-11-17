@@ -12,6 +12,7 @@ drivers, so they need GStreamer for the gst half and skip without it.
 """
 
 import ctypes
+import dataclasses
 import importlib
 import json
 import os
@@ -192,9 +193,9 @@ def test_hosted_elements_import_under_g2g_with_no_pygobject(tmp_path):
 
     assert result.returncode == 0, result.stderr
     # The shadow raises with this text, so it appears only if something imported gi.
-    assert (
-        NO_PYGOBJECT not in result.stderr
-    ), "an element reached for GStreamer at import time"
+    assert NO_PYGOBJECT not in result.stderr, (
+        "an element reached for GStreamer at import time"
+    )
 
 
 def test_every_element_module_imports_under_g2g_without_gst_init():
@@ -1975,9 +1976,9 @@ def test_gst_tts_stamps_its_own_duration_and_no_presentation_time():
     assert ret == Gst.FlowReturn.OK
     assert len(pushed) == 1
     assert len(buffer_bytes(pushed[0])) == TTS_SAMPLES * 2, "S16LE, one channel"
-    assert (
-        pushed[0].pts == Gst.CLOCK_TIME_NONE
-    ), "the text buffer's pts is not the audio's"
+    assert pushed[0].pts == Gst.CLOCK_TIME_NONE, (
+        "the text buffer's pts is not the audio's"
+    )
     assert pushed[0].dts == Gst.CLOCK_TIME_NONE
     assert pushed[0].duration == expected_tts_duration_ns()
     assert leaf.srcpad.push_count == 1, "this family has never used finish_buffer"
@@ -2236,12 +2237,12 @@ def baseball_ball_ring_drawn(ball_x, ball_y):
 def test_baseball_overlay_ignores_a_ball_on_the_batter_or_the_bat():
     pytest.importorskip("cv2")
     assert baseball_ball_ring_drawn(900, 100), "a ball in the open is drawn"
-    assert not baseball_ball_ring_drawn(
-        BAT_BOX["x"] + 5, BAT_BOX["y"] + 5
-    ), "ball on the bat"
-    assert not baseball_ball_ring_drawn(
-        BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200
-    ), "ball on the batter"
+    assert not baseball_ball_ring_drawn(BAT_BOX["x"] + 5, BAT_BOX["y"] + 5), (
+        "ball on the bat"
+    )
+    assert not baseball_ball_ring_drawn(BATTER_BOX["x"] + 10, BATTER_BOX["y"] + 200), (
+        "ball on the batter"
+    )
 
 
 def test_baseball_overlay_merges_the_parts_of_one_bat_into_one_box():
@@ -2259,3 +2260,501 @@ def test_baseball_overlay_merges_the_parts_of_one_bat_into_one_box():
         {"box": (549, 112, 1226, 394), "confidence": 0.8},
         other_bat,
     ]
+
+
+PAN_PIXELS_PER_FRAME = 12
+LEADER_PIXELS_PER_FRAME = 30
+LEADER_START_X = 500
+FINISH_X = 640
+FINISH_FRAMES_PER_SECOND = 50
+FINISH_WIDTH, FINISH_HEIGHT = 1280, 720
+# the leader's nose reaches the line between frames 4 and 5
+CROSSING_FRAME = (FINISH_X - LEADER_START_X) / LEADER_PIXELS_PER_FRAME
+
+
+def textures():
+    import cv2
+
+    rng = np.random.default_rng(0)
+    half_shape = (FINISH_HEIGHT // 2, FINISH_WIDTH)
+    # sift finds no features in finer noise once finish_line_timer shrinks the frame
+    return [
+        cv2.resize(
+            cv2.GaussianBlur(
+                rng.integers(0, 255, half_shape, dtype=np.uint8), (0, 0), 1.5
+            ),
+            None,
+            fx=2,
+            fy=2,
+            interpolation=cv2.INTER_CUBIC,
+        )
+        for _ in range(2)
+    ]
+
+
+def panned_view(texture, frame_number):
+    left = frame_number * PAN_PIXELS_PER_FRAME
+    return texture[:, left : left + FINISH_WIDTH].astype(float)
+
+
+class StubLinePredictor:
+    def __init__(self, predictions):
+        self.predictions = iter(predictions)
+
+    def predict(self, image):
+        return next(self.predictions)
+
+
+def finish_line_timer_with(monkeypatch, line_predictions):
+    from finish_line_timer import FinishLineTimer
+    from utils import finish_line_model
+
+    line_detector = StubLinePredictor(line_predictions)
+    monkeypatch.setattr(
+        finish_line_model, "load_finish_line_model", lambda path, device: line_detector
+    )
+    timer = FinishLineTimer()
+    timer.line_model = "line.pth"
+    return timer
+
+
+def line_seen_at(frame_number):
+    from utils.finish_line_model import FinishLinePrediction
+
+    pan = frame_number * PAN_PIXELS_PER_FRAME
+    return FinishLinePrediction(
+        confidence=0.9,
+        ends=np.array([[FINISH_X - pan, 200.0], [FINISH_X - pan, 500.0]]),
+    )
+
+
+def run_finish(timer, scene, frame_count, race_start_seconds, false_box_frame=None):
+    upstream_blobs = (
+        {}
+        if race_start_seconds is None
+        else {
+            "race-window": json.dumps({"start_seconds": race_start_seconds}).encode(),
+            "racer-numbers": json.dumps({"1": 1, "2": 2}).encode(),
+        }
+    )
+    from utils.blob_headers import FINISH_LINE_META_HEADER
+
+    frames = []
+    for frame_number in range(frame_count):
+        gray = panned_view(scene, frame_number).astype(np.uint8)
+        pixels = np.dstack([gray, gray, gray, np.full_like(gray, 255)])
+        pan = frame_number * PAN_PIXELS_PER_FRAME
+        leader_front = LEADER_START_X + frame_number * LEADER_PIXELS_PER_FRAME - pan
+        racers = [
+            {
+                "label": "racer",
+                "score": 0.9,
+                "x": front - 100,
+                "y": 300,
+                "w": 100,
+                "h": 50,
+            }
+            for front in (leader_front, leader_front - 150)
+        ]
+        tracking_ids = [1, 2]
+        if frame_number == false_box_frame:
+            racers.append(
+                {
+                    "label": "racer",
+                    "score": 0.3,
+                    "x": FINISH_X - pan + 20,
+                    "y": 300,
+                    "w": 40,
+                    "h": 40,
+                }
+            )
+            tracking_ids.append(None)
+        sink = StubMetaSink(
+            upstream_objects=racers,
+            upstream_tracking_ids=tracking_ids,
+            upstream_blobs=upstream_blobs,
+            framerate=(FINISH_FRAMES_PER_SECOND, 1),
+        )
+        timer.g2g_process(
+            bytearray(pixels.tobytes()), FINISH_WIDTH, FINISH_HEIGHT, "RGBA", sink
+        )
+        finish_lines = [
+            json.loads(payload)
+            for header, payload in sink.staged_blobs
+            if header == FINISH_LINE_META_HEADER.decode()
+        ]
+        frames.append(
+            {
+                "race_time_seconds": timer.race_time_seconds,
+                "finish_line": finish_lines[0] if finish_lines else None,
+            }
+        )
+    return frames
+
+
+def test_finish_line_timer_times_a_crossing_from_before_the_line_was_found(
+    monkeypatch,
+):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    timer = finish_line_timer_with(monkeypatch, [line_seen_at(0), line_seen_at(5)])
+    frames = run_finish(timer, scene, 8, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    assert frames[4]["race_time_seconds"] is None
+    assert frames[5]["race_time_seconds"] == pytest.approx(
+        LINE_SEARCH_FROM_SECONDS + CROSSING_FRAME / FINISH_FRAMES_PER_SECOND,
+        abs=0.002,
+    )
+
+
+def test_finish_line_timer_writes_the_line_and_crossing_time(monkeypatch):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    timer = finish_line_timer_with(monkeypatch, [line_seen_at(0), line_seen_at(5)])
+    frames = run_finish(timer, scene, 8, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    assert frames[4]["finish_line"] is None
+    last = frames[7]["finish_line"]
+    seen = line_seen_at(7).ends
+    assert np.allclose(last["line"], seen, atol=2.0)
+    assert last["first_crossing_seconds"] == pytest.approx(
+        CROSSING_FRAME / FINISH_FRAMES_PER_SECOND, abs=0.002
+    )
+
+
+def test_finish_line_timer_times_each_numbered_racer(monkeypatch):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    timer = finish_line_timer_with(monkeypatch, [line_seen_at(0), line_seen_at(5)])
+    frames = run_finish(timer, scene, 20, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    # the second racer runs 150 px behind the leader
+    second_crossing_frame = CROSSING_FRAME + 150 / LEADER_PIXELS_PER_FRAME
+    by_number = frames[-1]["finish_line"]["crossing_seconds_by_racer_number"]
+    assert by_number == {
+        "1": pytest.approx(CROSSING_FRAME / FINISH_FRAMES_PER_SECOND, abs=0.002),
+        "2": pytest.approx(
+            second_crossing_frame / FINISH_FRAMES_PER_SECOND, abs=0.002
+        ),
+    }
+
+
+def test_finish_line_timer_ignores_an_untracked_box_past_the_line(monkeypatch):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    timer = finish_line_timer_with(monkeypatch, [line_seen_at(0), line_seen_at(5)])
+    frames = run_finish(
+        timer,
+        scene,
+        8,
+        race_start_seconds=-LINE_SEARCH_FROM_SECONDS,
+        false_box_frame=2,
+    )
+    assert frames[5]["race_time_seconds"] == pytest.approx(
+        LINE_SEARCH_FROM_SECONDS + CROSSING_FRAME / FINISH_FRAMES_PER_SECOND,
+        abs=0.002,
+    )
+
+
+def test_finish_line_timer_ignores_a_line_that_jumps_between_samples(monkeypatch):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    jumped = dataclasses.replace(line_seen_at(5), ends=line_seen_at(25).ends)
+    timer = finish_line_timer_with(monkeypatch, [line_seen_at(0), jumped])
+    frames = run_finish(timer, scene, 8, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    assert frames[-1]["race_time_seconds"] is None
+
+
+def test_finish_line_timer_ignores_a_line_with_the_near_end_above_the_far_end(
+    monkeypatch,
+):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS
+
+    scene, _ = textures()
+    upside_down = [
+        dataclasses.replace(line_seen_at(frame), ends=line_seen_at(frame).ends[::-1])
+        for frame in (0, 5)
+    ]
+    timer = finish_line_timer_with(monkeypatch, upside_down)
+    frames = run_finish(timer, scene, 8, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    assert frames[-1]["race_time_seconds"] is None
+
+
+def test_finish_line_timer_ignores_a_line_first_seen_at_low_confidence(monkeypatch):
+    from finish_line_timer import LINE_SEARCH_FROM_SECONDS, MINIMUM_LINE_CONFIDENCE
+
+    scene, _ = textures()
+    doubtful = dataclasses.replace(
+        line_seen_at(0), confidence=MINIMUM_LINE_CONFIDENCE - 0.1
+    )
+    timer = finish_line_timer_with(monkeypatch, [doubtful, line_seen_at(5)])
+    frames = run_finish(timer, scene, 8, race_start_seconds=-LINE_SEARCH_FROM_SECONDS)
+    assert frames[-1]["race_time_seconds"] is None
+
+
+def test_finish_line_timer_ignores_frames_outside_the_race_window(monkeypatch):
+    scene, _ = textures()
+    timer = finish_line_timer_with(monkeypatch, [])
+    frames = run_finish(timer, scene, 8, race_start_seconds=None)
+    assert frames[-1]["race_time_seconds"] is None
+    assert frames[-1]["finish_line"] is None
+
+
+NUMBER_FRAME_SIZE = 64
+
+
+def number_logits_of(**by_class):
+    from racer_number_classifier import RACER_NUMBER_CLASSES
+
+    logits = [0.0] * len(RACER_NUMBER_CLASSES)
+    for name, logit in by_class.items():
+        logits[RACER_NUMBER_CLASSES.index(name.removeprefix("number_"))] = logit
+    return logits
+
+
+class StubNetwork:
+    def __init__(self, logits_per_call):
+        self.logits_per_call = iter(logits_per_call)
+
+    def load_state_dict(self, state_dict):
+        assert state_dict == {}
+
+    def to(self, device):
+        return self
+
+    def eval(self):
+        return self
+
+    def __call__(self, batch):
+        import torch
+
+        logits = torch.tensor(next(self.logits_per_call), dtype=torch.float32)
+        assert len(logits) == len(batch)
+        return logits
+
+
+def stub_classifiers(monkeypatch, tmp_path, networks):
+    import torch
+    import torchvision
+
+    stubs, paths = {}, {}
+    for name, (classes, logits_per_call) in networks.items():
+        stubs[name] = StubNetwork(logits_per_call)
+        paths[name] = str(tmp_path / f"{name}.pth")
+        checkpoint = {
+            "architecture": name,
+            "classes": classes,
+            "image_size": 32,
+            "state_dict": {},
+        }
+        torch.save(checkpoint, paths[name])
+    monkeypatch.setattr(
+        torchvision.models,
+        "get_model",
+        lambda architecture, num_classes: stubs[architecture],
+    )
+    return paths
+
+
+def number_probabilities_blob(monkeypatch, tmp_path, logits):
+    import racer_number_classifier
+    from utils.blob_headers import RACER_NUMBER_PROBABILITIES_META_HEADER
+
+    monkeypatch.setattr(racer_number_classifier, "CLASSIFIER_DEVICE", "cpu")
+    paths = stub_classifiers(
+        monkeypatch,
+        tmp_path,
+        {"numbers": (racer_number_classifier.RACER_NUMBER_CLASSES, [logits])},
+    )
+    model = paths["numbers"]
+    classifier = racer_number_classifier.RacerNumberClassifier()
+    classifier.model = str(model)
+    racers = [
+        {
+            "label": "racer",
+            "score": 0.9,
+            "x": 4,
+            "y": 4 + 24 * row,
+            "w": 40,
+            "h": 20,
+        }
+        for row in range(len(logits))
+    ]
+    sink = StubMetaSink(
+        upstream_objects=racers,
+        upstream_blobs={"race-window": json.dumps({"start_seconds": 1.0}).encode()},
+    )
+    pixels = np.zeros((NUMBER_FRAME_SIZE, NUMBER_FRAME_SIZE, 4), np.uint8)
+    classifier.g2g_process(
+        bytearray(pixels.tobytes()), NUMBER_FRAME_SIZE, NUMBER_FRAME_SIZE, "RGBA", sink
+    )
+    [payload] = [
+        payload
+        for header, payload in sink.staged_blobs
+        if header == RACER_NUMBER_PROBABILITIES_META_HEADER.decode()
+    ]
+    return json.loads(payload)
+
+
+def test_racer_number_classifier_writes_numbers_1_to_8_then_none_for_every_box(
+    monkeypatch, tmp_path
+):
+    blob = number_probabilities_blob(
+        monkeypatch,
+        tmp_path,
+        [number_logits_of(number_4=5.0), number_logits_of(none=5.0, number_1=2.0)],
+    )
+    assert list(blob) == ["0", "1"]
+    assert np.argmax(blob["0"]) == 3
+    assert np.argmax(blob["1"]) == 8
+    assert sum(blob["1"]) == pytest.approx(1.0)
+
+
+def number_reading(number, probability=0.9):
+    reading = [(1 - probability) / 8] * 9
+    reading[number - 1] = probability
+    return reading
+
+
+NO_NUMBER_READING = [0.01] * 8 + [0.92]
+NUMBER_FRAME_WIDTH = 640
+
+
+def numbers_of_racers_on_each_frame(frames):
+    from racer_number_tracker import RacerNumberTracker
+
+    tracker = RacerNumberTracker()
+    tagged = []
+    for racers in frames:
+        boxes = [
+            {"label": "racer", "score": 0.9, "x": x, "y": 100, "w": 40, "h": 20}
+            for x, _reading in racers
+        ]
+        readings = {str(index): reading for index, (_x, reading) in enumerate(racers)}
+        sink = StubMetaSink(
+            upstream_objects=boxes,
+            upstream_blobs={
+                "race-window": json.dumps({"start_seconds": 1.0}).encode(),
+                "racer-number-probabilities": json.dumps(readings).encode(),
+            },
+        )
+        tracker.g2g_process(
+            bytearray(NUMBER_FRAME_WIDTH * 4), NUMBER_FRAME_WIDTH, 1, "RGBA", sink
+        )
+        tagged.append(dict(sink.staged_upstream_tracking))
+    return tagged
+
+
+def test_racer_number_tracker_tags_a_box_with_the_number_its_cloth_reads():
+    assert numbers_of_racers_on_each_frame([[(10, number_reading(3))]]) == [{0: 3}]
+
+
+def test_racer_number_tracker_gives_an_unread_box_the_number_last_seen_beside_it():
+    seen = [(10, number_reading(3))]
+    assert numbers_of_racers_on_each_frame([seen, [(12, NO_NUMBER_READING)]])[-1] == {
+        0: 3
+    }
+    assert numbers_of_racers_on_each_frame([seen, [(400, NO_NUMBER_READING)]])[-1] == {}
+
+
+def test_racer_number_tracker_gives_a_number_to_one_box_on_a_frame():
+    racers = [(10, number_reading(4, 0.6)), (300, number_reading(4, 0.9))]
+    assert numbers_of_racers_on_each_frame([racers]) == [{1: 4}]
+
+
+def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable():
+    from racer_number_tracker import RacerNumberSlots
+
+    def racers(x):
+        return [
+            {"ref": row, "score": 0.9, "x": x, "y": y, "w": 40, "h": 20}
+            for row, y in enumerate([100, 115])
+        ]
+
+    slots = RacerNumberSlots()
+    read = {"0": number_reading(3), "1": number_reading(5)}
+    slots.assign(0, 1.0, racers(10), read, NUMBER_FRAME_WIDTH)
+    unread = {"0": NO_NUMBER_READING, "1": NO_NUMBER_READING}
+    numbered = slots.assign(1, 1.0, racers(12), unread, NUMBER_FRAME_WIDTH)
+    assert {racer["y"]: number for racer, number in numbered} == {100: 3, 115: 5}
+
+
+def test_racer_number_tracker_ignores_the_cloth_of_a_box_at_the_frame_edge():
+    assert numbers_of_racers_on_each_frame([[(0, number_reading(7))]]) == [{}]
+    inside = numbers_of_racers_on_each_frame([[(1, number_reading(7))]])
+    assert inside == [{0: 7}]
+
+
+def tagged_race_starts(
+    monkeypatch, tmp_path, race_running_samples, frame_count, start_frame
+):
+    import race_start
+    from race_start import RaceStart, STATE_INTERVAL_FRAMES
+
+    monkeypatch.setattr(race_start, "CLASSIFIER_DEVICE", "cpu")
+    states = [
+        [[0.0, 10.0, 0.0] if sample in race_running_samples else [0.0, 0.0, 10.0]]
+        for sample in range(frame_count // STATE_INTERVAL_FRAMES + 1)
+    ]
+    after = [
+        [[10.0, 0.0] if frame >= start_frame else [0.0, 10.0]]
+        for frame in range(frame_count)
+    ]
+    paths = stub_classifiers(
+        monkeypatch,
+        tmp_path,
+        {
+            "state": (["other", "race_running", "before_start"], states),
+            "window": (["after", "before"], after),
+        },
+    )
+    element = RaceStart()
+    element.state_model = paths["state"]
+    element.window_model = paths["window"]
+    scene, _ = textures()
+    gray = panned_view(scene, 0).astype(np.uint8)
+    pixels = np.dstack([gray, gray, gray, np.full_like(gray, 255)])
+    starts = []
+    for _ in range(frame_count):
+        sink = StubMetaSink(framerate=(FINISH_FRAMES_PER_SECOND, 1))
+        element.g2g_process(
+            bytearray(pixels.tobytes()), FINISH_WIDTH, FINISH_HEIGHT, "RGBA", sink
+        )
+        starts.append(
+            [json.loads(payload)["start_seconds"] for _, payload in sink.staged_blobs]
+        )
+    return starts
+
+
+def test_race_start_tags_frames_from_soon_after_the_start_until_the_window_closes(
+    monkeypatch, tmp_path
+):
+    from race_start import RACE_AFTER_SECONDS
+
+    start_frame = 100
+    confirmed_frame = start_frame + int(RACE_AFTER_SECONDS * FINISH_FRAMES_PER_SECOND)
+    starts = tagged_race_starts(
+        monkeypatch, tmp_path, range(20, 1000), confirmed_frame + 20, start_frame
+    )
+    tagged = [frame for frame, tags in enumerate(starts) if tags]
+    assert tagged[0] < confirmed_frame
+    assert tagged == list(range(tagged[0], len(starts)))
+    assert {tag for tags in starts for tag in tags} == {
+        start_frame / FINISH_FRAMES_PER_SECOND
+    }
+
+
+def test_race_start_drops_the_tags_of_a_start_the_next_frames_do_not_confirm(
+    monkeypatch, tmp_path
+):
+    from race_start import RACE_AFTER_SECONDS
+
+    start_frame = 100
+    confirmed_frame = start_frame + int(RACE_AFTER_SECONDS * FINISH_FRAMES_PER_SECOND)
+    starts = tagged_race_starts(
+        monkeypatch, tmp_path, range(20, 30), confirmed_frame + 20, start_frame
+    )
+    assert any(starts[:confirmed_frame])
+    assert not any(starts[confirmed_frame:])

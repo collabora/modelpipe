@@ -187,6 +187,9 @@ all = [
     "modelpipe[onnx,tinygrad,llamacpp,openvino,tensorflow,litert,vad]",
     "modelpipe[yolo,llm,audio,diffusion,face,superres,skia,kafka,mqtt]",
 ]
+rfdetr = [
+    "rfdetr>=1.12.0",
+]
 
 # Optional
 [dependency-groups]

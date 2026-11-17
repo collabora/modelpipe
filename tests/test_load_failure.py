@@ -279,3 +279,14 @@ def test_an_engine_that_runs_the_precision_loads_with_it():
     element.do_load_model()
     assert element.engine.model == LOADABLE_MODEL_NAME
     assert element.engine.precision == "fp16"
+
+
+def test_an_element_module_imports_before_gstreamer_is_initialised():
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import tracker"],
+        env={**os.environ, "MP_BACKEND": "gst", "PYTHONPATH": str(PLUGIN_DIR)},
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr.decode()

@@ -17,6 +17,9 @@ import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst, GObject  # noqa: E402
 
+# gstreamer segfaults on element type registration before Gst.init
+Gst.init(None)
+
 from backend.gst.transform import BaseTransform  # noqa: E402
 from backend.gst.aggregator import BaseAggregator  # noqa: E402
 from backend.gst.video_transform import VideoTransform  # noqa: E402

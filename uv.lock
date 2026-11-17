@@ -1476,6 +1476,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "defuser"
 version = "0.0.28"
 source = { registry = "https://pypi.org/simple" }
@@ -4447,6 +4456,9 @@ openvino = [
     { name = "openvino-genai" },
     { name = "optimum-intel" },
 ]
+rfdetr = [
+    { name = "rfdetr" },
+]
 rknn = [
     { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64'" },
 ]
@@ -4574,6 +4586,7 @@ requires-dist = [
     { name = "pysilero-vad", marker = "extra == 'vad'" },
     { name = "pywhispercpp", marker = "extra == 'llamacpp'" },
     { name = "qwen-vl-utils", extras = ["decord"], marker = "extra == 'llm'", specifier = ">=0.0.8" },
+    { name = "rfdetr", marker = "extra == 'rfdetr'", specifier = ">=1.12.0" },
     { name = "rknn-toolkit-lite2", marker = "python_full_version == '3.12.*' and platform_machine == 'aarch64' and extra == 'rknn'", specifier = ">=2.3.2" },
     { name = "scipy" },
     { name = "sentencepiece" },
@@ -4598,7 +4611,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'yolo'" },
     { name = "whisperspeech", marker = "extra == 'audio'" },
 ]
-provides-extras = ["yolo", "tensorrt", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "rknn", "iree", "vad", "mcp", "all"]
+provides-extras = ["yolo", "tensorrt", "llm", "awq", "audio", "diffusion", "face", "superres", "skia", "kafka", "mqtt", "onnx", "onnx-gpu", "tvm", "tinygrad", "mlx", "mlx-cpu", "executorch", "llamacpp", "jax-cpu", "jax-gpu", "jax-tpu", "openvino", "tensorflow", "litert", "ncnn", "rknn", "iree", "vad", "mcp", "all", "rfdetr"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -7703,6 +7716,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pydeprecate"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d4/1e/b069ea704e42fefeb523835ba3d712347ff672743e5fa9428f4201525328/pydeprecate-0.9.0.tar.gz", hash = "sha256:ed49a36506f63a8d4ae84ffedff1e2879733d536c7a6aaafdf8bfcd39520059b", size = 151667, upload-time = "2026-06-05T19:51:17.43Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/87/a155f16c1c17adccaa2ed2256484fe1c6ad37b925e8e39695ed8860bc0b5/pydeprecate-0.9.0-py3-none-any.whl", hash = "sha256:c9501dae1a2567a3c7f7b04221ad5a97d1ad972a02ddb729a04299b435fedd7c", size = 102725, upload-time = "2026-06-05T19:51:16.235Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -8257,6 +8279,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
+]
+
+[[package]]
+name = "rfdetr"
+version = "1.12.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin') or (python_full_version < '3.11' and sys_platform == 'darwin')" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin') or (python_full_version >= '3.11' and sys_platform == 'darwin')" },
+    { name = "pydantic" },
+    { name = "pydeprecate" },
+    { name = "requests" },
+    { name = "supervision" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/23/16fe5e734196efde67a83858adbb6ef415410db8e68a02c6dab9bf5c6d28/rfdetr-1.12.1.tar.gz", hash = "sha256:15649123e9d62cab1df950e761ddc1f6b43ee1b9b4e9540b6a75057d418bd831", size = 981932, upload-time = "2026-11-12T13:25:17.813Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/09/12b3c68c04ac38e47befa1a6226421405c58e21562a63447ff7d75ae1614/rfdetr-1.12.1-py3-none-any.whl", hash = "sha256:d4671be83f9633f8f3de1a59ab3f9c25b320705175d93c8c788b8e1e8a401724", size = 1051356, upload-time = "2026-11-12T13:25:15.843Z" },
 ]
 
 [[package]]
@@ -9507,6 +9550,30 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
+]
+
+[[package]]
+name = "supervision"
+version = "0.31.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "av" },
+    { name = "defusedxml" },
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform != 'darwin') or (python_full_version < '3.11' and sys_platform == 'darwin')" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.14' and sys_platform != 'darwin') or (python_full_version >= '3.11' and sys_platform == 'darwin')" },
+    { name = "pillow", version = "12.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pillow", version = "13.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pydeprecate" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/59/ba9dc393e1cfad76005411386c5543c611e43e8e0a84d66551fd90355a56/supervision-0.31.7.tar.gz", hash = "sha256:9b540bfa7488d9fd96100ebecaf407a25583d2fd78eccded82f916f4ffe7fe3d", size = 457631, upload-time = "2026-11-11T18:58:19.253Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2d/ad/5c8d49c9f2ea88bc982e7505c8e8de1d46c94ae85267958282322026a343/supervision-0.31.7-py3-none-any.whl", hash = "sha256:25d05d0c45fe61d63426f3dfaf40145c567be78a618da3abfe1f1b7be8edba91", size = 500551, upload-time = "2026-11-11T18:58:17.64Z" },
 ]
 
 [[package]]
