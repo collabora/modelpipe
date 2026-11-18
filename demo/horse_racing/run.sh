@@ -25,9 +25,9 @@ if [[ "$OUT" == *.jsonl ]]; then
   rm -f "$OUT"
   SINK="mp_metasink location=$OUT"
 elif [[ -n "$OUT" ]]; then
-  SINK="mp_overlay tracking=true ! videoconvert ! x264enc ! mp4mux ! filesink location=$OUT"
+  SINK="mp_racer_overlay number-cloths=horse ! videoconvert ! x264enc ! mp4mux ! filesink location=$OUT"
 else
-  SINK="mp_overlay tracking=true ! videoconvert ! autovideosink"
+  SINK="mp_racer_overlay number-cloths=horse ! videoconvert ! autovideosink"
 fi
 
 echo "[$MP_BACKEND] '$IN' -> ${OUT:-screen}"

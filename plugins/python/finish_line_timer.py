@@ -14,7 +14,6 @@ from backend.video_frame import (
     SYSTEM_MEMORY,
     VideoFrameCapabilities,
 )
-from sport_overlay_drawing import drawing_for
 from utils.blob_headers import (
     FINISH_LINE_META_HEADER,
     RACE_WINDOW_BLOB_NAME,
@@ -28,43 +27,6 @@ from utils.scene_match import (
     transform_points,
 )
 
-LINE_RGBA = (255, 40, 40, 255)
-UNNUMBERED_RACER_RGBA = (255, 230, 0, 255)
-HEADER_RGBA = (0, 0, 0, 255)
-TEXT_RGBA = (255, 255, 255, 255)
-TAG_OUTLINE_RGBA = (128, 128, 128, 255)
-LINE_THICKNESS = 2
-RACER_THICKNESS = 2
-# number cloth colours by racer number, and the colour of the number on each
-NUMBER_CLOTH_RGBA = {
-    1: ((220, 40, 40, 255), (255, 255, 255, 255)),
-    2: ((90, 90, 90, 255), (255, 255, 255, 255)),
-    3: ((255, 255, 255, 255), (0, 0, 0, 255)),
-    4: ((30, 120, 220, 255), (255, 255, 255, 255)),
-    5: ((255, 220, 0, 255), (0, 0, 0, 255)),
-    6: ((40, 170, 60, 255), (255, 255, 255, 255)),
-    7: ((0, 0, 0, 255), (255, 255, 255, 255)),
-    8: ((255, 120, 200, 255), (0, 0, 0, 255)),
-}
-NUMBER_CLOTH_RGBA_ON_DARK = {
-    number: cloth for number, (cloth, _) in NUMBER_CLOTH_RGBA.items()
-} | {
-    2: (200, 200, 200, 255),
-    7: (200, 200, 200, 255),
-}
-NUMBER_TAG_WIDTH, NUMBER_TAG_HEIGHT = 24, 26
-NUMBER_TEXT_SCALE = 0.8
-HEADER_HEIGHT = 92
-CLOCK_LABEL_ORIGIN, CLOCK_ORIGIN = (16, 34), (16, 76)
-CLOCK_LABEL_SCALE, CLOCK_SCALE = 0.8, 1.2
-NUMBER_COLUMN_LEFT, NUMBER_COLUMN_STEP = 330, 120
-NUMBER_COLUMN_TAG_TOP = 12
-NUMBER_COLUMN_TIME_Y = 76
-NUMBER_COLUMN_TIME_SCALE = 0.65
-FINISH_ROW_HEIGHT = 30
-FINISH_LIST_WIDTH = 230
-FINISH_LIST_TEXT_SCALE = 0.8
-TEXT_THICKNESS = 2
 # sift takes 5 ms at scale 0.25 and 33 ms at scale 0.5
 MATCH_SCALE = 0.25
 FRAME_TO_FRAME_INLIERS = 20
@@ -86,13 +48,13 @@ class FinishLineTimer(InPlaceVideoTransform):
         "Finish Line Timer",
         "Filter/Effect/Video",
         "On frames carrying a race-window blob, finds the finish line with a "
-        "keypoint model, follows it through the camera pan and shows the time "
+        "keypoint model, follows it through the camera pan and writes the time "
         "from the race start to each numbered racer crossing it",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
     FRAME_CAPABILITIES = VideoFrameCapabilities(
-        (SYSTEM_MEMORY,), RGBA_PIXEL_FORMATS, True, True
+        (SYSTEM_MEMORY,), RGBA_PIXEL_FORMATS, True, False
     )
 
     line_model = GObject.Property(
@@ -107,7 +69,6 @@ class FinishLineTimer(InPlaceVideoTransform):
         super().__init__()
         self._frame = 0
         self._line_detector = None
-        self._drawings = {}
         self._start_race(None)
 
     def _start_race(self, race_start_seconds):
@@ -254,73 +215,6 @@ class FinishLineTimer(InPlaceVideoTransform):
                     f"({result['status']})"
                 )
 
-    def _draw_number_tag(self, drawing, number, left, bottom):
-        cloth_rgba, number_rgba = NUMBER_CLOTH_RGBA[number]
-        top_left = (left, bottom - NUMBER_TAG_HEIGHT)
-        bottom_right = (left + NUMBER_TAG_WIDTH, bottom)
-        drawing.fill_rectangle(top_left, bottom_right, cloth_rgba)
-        if cloth_rgba == HEADER_RGBA:
-            drawing.draw_rectangle(top_left, bottom_right, TAG_OUTLINE_RGBA, 1)
-        drawing.draw_text(
-            str(number),
-            (left + 5, bottom - 6),
-            NUMBER_TEXT_SCALE,
-            number_rgba,
-            TEXT_THICKNESS,
-        )
-
-    def _draw_header(self, drawing, width, clock_seconds, finished):
-        drawing.fill_rectangle((0, 0), (width, HEADER_HEIGHT), HEADER_RGBA)
-        drawing.draw_text(
-            "Time", CLOCK_LABEL_ORIGIN, CLOCK_LABEL_SCALE, TEXT_RGBA, TEXT_THICKNESS
-        )
-        drawing.draw_text(
-            f"{clock_seconds:5.2f}",
-            CLOCK_ORIGIN,
-            CLOCK_SCALE,
-            TEXT_RGBA,
-            TEXT_THICKNESS,
-        )
-        for number in NUMBER_CLOTH_RGBA:
-            self._draw_number_tag(
-                drawing,
-                number,
-                NUMBER_COLUMN_LEFT + (number - 1) * NUMBER_COLUMN_STEP,
-                NUMBER_COLUMN_TAG_TOP + NUMBER_TAG_HEIGHT,
-            )
-        for place, (number, race_seconds) in enumerate(finished, 1):
-            drawing.draw_text(
-                f"{race_seconds:.2f}({place})",
-                (
-                    NUMBER_COLUMN_LEFT + (number - 1) * NUMBER_COLUMN_STEP - 30,
-                    NUMBER_COLUMN_TIME_Y,
-                ),
-                NUMBER_COLUMN_TIME_SCALE,
-                NUMBER_CLOTH_RGBA_ON_DARK[number],
-                TEXT_THICKNESS,
-            )
-
-    def _draw_finish_list(self, drawing, height, finished):
-        top = height - FINISH_ROW_HEIGHT * len(finished) - 20
-        drawing.fill_rectangle((0, top), (FINISH_LIST_WIDTH, height), HEADER_RGBA)
-        for index, (number, race_seconds) in enumerate(finished):
-            y = top + FINISH_ROW_HEIGHT * (index + 1)
-            drawing.draw_text(
-                str(index + 1),
-                (14, y),
-                FINISH_LIST_TEXT_SCALE,
-                TEXT_RGBA,
-                TEXT_THICKNESS,
-            )
-            self._draw_number_tag(drawing, number, 44, y + 4)
-            drawing.draw_text(
-                f"{race_seconds:.3f}",
-                (84, y),
-                FINISH_LIST_TEXT_SCALE,
-                TEXT_RGBA,
-                TEXT_THICKNESS,
-            )
-
     def process_in_place(self, frame, fmt, buf):
         import cv2
 
@@ -339,130 +233,65 @@ class FinishLineTimer(InPlaceVideoTransform):
             race_start_seconds != self._race_start_seconds
         ):
             self._start_race(race_start_seconds)
-        drawing = drawing_for(self._drawings, frame, fmt)
         finish = {}
-        with drawing.drawing_on(frame):
-            if race_start_seconds is not None:
-                numbers_by_track_id = (
-                    json.loads(blobs[RACER_NUMBERS_BLOB_NAME])
-                    if RACER_NUMBERS_BLOB_NAME in blobs
-                    else {}
-                )
-                racers = self._tracked_racers(buf)
-                racer_boxes = [
-                    (d["x"], d["y"], d["x"] + d["w"], d["y"] + d["h"]) for d in racers
-                ]
-                racer_numbers = [
-                    numbers_by_track_id.get(str(d["track_id"])) for d in racers
-                ]
-                self._follow_camera(
-                    cv2.cvtColor(frame, cv2.COLOR_RGBA2GRAY), racer_boxes
-                )
-                self._history.append(
-                    {
-                        "frame": self._frame,
-                        "racer_boxes": racer_boxes,
-                        "numbered_boxes": {
-                            number: box
-                            for number, box in zip(racer_numbers, racer_boxes)
-                            if number is not None
-                        },
-                        "segment": self._segment,
-                        "cumulative": self._cumulative,
-                    }
-                )
-                oldest = (
-                    self._line["frame"] if self._line else self._frame
-                ) - RACERS_BEFORE_LINE_SECONDS * frames_per_second
-                self._history = [e for e in self._history if e["frame"] >= oldest]
-                since_start = self._frame / frames_per_second - race_start_seconds
-                if (
-                    self._line is None
-                    and LINE_SEARCH_FROM_SECONDS <= since_start < LINE_SEARCH_TO_SECONDS
-                    and self._frame % LINE_INTERVAL_FRAMES == 0
-                ):
-                    self._search_line(cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB))
-                if self._line is not None and not self._finished:
-                    self._time_crossing(frames_per_second)
-                if self._line is not None:
-                    frames_since_line = self._frame - self._line["frame"]
-                    if frames_since_line == 0:
-                        self._time_racers(frames_per_second, RACERS_BEFORE_LINE_SECONDS)
-                    elif frames_since_line % RACER_TIMING_INTERVAL_FRAMES == 0:
-                        self._time_racers(
-                            frames_per_second, RACER_TIMING_WINDOW_SECONDS
-                        )
-                if self._line is not None and self._line["segment"] == self._segment:
-                    far, near = transform_points(
-                        self._line_transform(self._cumulative), self._line["points"]
-                    )
-                    finish["line"] = [far.tolist(), near.tolist()]
-                    drawing.draw_segments(
-                        [(tuple(far.astype(int)), tuple(near.astype(int)))],
-                        LINE_RGBA,
-                        LINE_THICKNESS,
-                    )
-                for number, (x1, y1, x2, y2) in zip(racer_numbers, racer_boxes):
-                    top_left, bottom_right = (int(x1), int(y1)), (int(x2), int(y2))
-                    if number is None:
-                        drawing.draw_rectangle(
-                            top_left,
-                            bottom_right,
-                            UNNUMBERED_RACER_RGBA,
-                            RACER_THICKNESS,
-                        )
-                        continue
-                    drawing.draw_rectangle(
-                        top_left,
-                        bottom_right,
-                        NUMBER_CLOTH_RGBA[number][0],
-                        RACER_THICKNESS,
-                    )
-                    column_centre = (
-                        NUMBER_COLUMN_LEFT
-                        + (number - 1) * NUMBER_COLUMN_STEP
-                        + NUMBER_TAG_WIDTH // 2
-                    )
-                    drawing.draw_segments(
-                        [
-                            (
-                                ((top_left[0] + bottom_right[0]) // 2, top_left[1]),
-                                (column_centre, HEADER_HEIGHT),
-                            )
-                        ],
-                        NUMBER_CLOTH_RGBA_ON_DARK[number],
-                        LINE_THICKNESS,
-                    )
-            finished = sorted(
-                (
-                    (number, seconds - self._race_start_seconds)
-                    for number, seconds in self._crossing_seconds_by_number.items()
-                ),
-                key=lambda item: item[1],
-            )
-            if race_start_seconds is not None or self.race_time_seconds is not None:
-                height, width = frame.shape[:2]
-                self._draw_header(
-                    drawing,
-                    width,
-                    (
-                        self._frame / frames_per_second - self._race_start_seconds
-                        if self.race_time_seconds is None
-                        else self.race_time_seconds
-                    ),
-                    finished,
-                )
-                if finished:
-                    self._draw_finish_list(drawing, height, finished)
-            if self.race_time_seconds is not None:
-                finish["first_crossing_seconds"] = (
-                    self._race_start_seconds + self.race_time_seconds
-                )
-            if self._crossing_seconds_by_number:
-                finish["crossing_seconds_by_racer_number"] = {
-                    str(number): seconds
-                    for number, seconds in self._crossing_seconds_by_number.items()
+        if race_start_seconds is not None:
+            numbers_by_track_id = json.loads(blobs[RACER_NUMBERS_BLOB_NAME])[
+                "numbers_by_track_id"
+            ]
+            racers = self._tracked_racers(buf)
+            racer_boxes = [
+                (d["x"], d["y"], d["x"] + d["w"], d["y"] + d["h"]) for d in racers
+            ]
+            racer_numbers = [
+                numbers_by_track_id.get(str(d["track_id"])) for d in racers
+            ]
+            self._follow_camera(cv2.cvtColor(frame, cv2.COLOR_RGBA2GRAY), racer_boxes)
+            self._history.append(
+                {
+                    "frame": self._frame,
+                    "racer_boxes": racer_boxes,
+                    "numbered_boxes": {
+                        number: box
+                        for number, box in zip(racer_numbers, racer_boxes)
+                        if number is not None
+                    },
+                    "segment": self._segment,
+                    "cumulative": self._cumulative,
                 }
+            )
+            oldest = (
+                self._line["frame"] if self._line else self._frame
+            ) - RACERS_BEFORE_LINE_SECONDS * frames_per_second
+            self._history = [e for e in self._history if e["frame"] >= oldest]
+            since_start = self._frame / frames_per_second - race_start_seconds
+            if (
+                self._line is None
+                and LINE_SEARCH_FROM_SECONDS <= since_start < LINE_SEARCH_TO_SECONDS
+                and self._frame % LINE_INTERVAL_FRAMES == 0
+            ):
+                self._search_line(cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB))
+            if self._line is not None and not self._finished:
+                self._time_crossing(frames_per_second)
+            if self._line is not None:
+                frames_since_line = self._frame - self._line["frame"]
+                if frames_since_line == 0:
+                    self._time_racers(frames_per_second, RACERS_BEFORE_LINE_SECONDS)
+                elif frames_since_line % RACER_TIMING_INTERVAL_FRAMES == 0:
+                    self._time_racers(frames_per_second, RACER_TIMING_WINDOW_SECONDS)
+            if self._line is not None and self._line["segment"] == self._segment:
+                far, near = transform_points(
+                    self._line_transform(self._cumulative), self._line["points"]
+                )
+                finish["line"] = [far.tolist(), near.tolist()]
+        if self.race_time_seconds is not None:
+            finish["first_crossing_seconds"] = (
+                self._race_start_seconds + self.race_time_seconds
+            )
+        if self._crossing_seconds_by_number:
+            finish["crossing_seconds_by_racer_number"] = {
+                str(number): seconds
+                for number, seconds in self._crossing_seconds_by_number.items()
+            }
         if finish:
             frameio.append_blob(
                 buf, FINISH_LINE_META_HEADER, json.dumps(finish).encode()

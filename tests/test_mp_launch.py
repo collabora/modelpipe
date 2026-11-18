@@ -394,6 +394,7 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "mp_anonymize",
         "mp_football_overlay",
         "mp_baseball_overlay",
+        "mp_racer_overlay",
         "mp_overlay_counter",
         "mp_kafkasink",
     }

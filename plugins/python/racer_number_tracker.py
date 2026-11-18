@@ -6,6 +6,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 
+import collections
 import dataclasses
 import json
 
@@ -37,6 +38,9 @@ class RacerNumberSlotSettings:
     number_evidence_decay: float = 0.5
     same_box_iou: float = 0.3
     minimum_number_weight: float = 0.3
+    field_entry_frames: int = 25
+    # on Segula C misread numbers reached 7.5% of the most read number's frames, runners 18%
+    field_entry_share: float = 0.1
 
 
 class RacerNumberSlots:
@@ -47,6 +51,7 @@ class RacerNumberSlots:
 
     def _start_race(self):
         self._last_seen = {}
+        self._read_frames_by_number = collections.Counter()
         self._previous_frame = None
         self._previous_boxes = []
         self._previous_evidence = []
@@ -108,15 +113,27 @@ class RacerNumberSlots:
             )
         return evidence
 
-    def assign(
-        self, frame, race_start_seconds, objects, number_probabilities, frame_width
-    ):
-        import numpy as np
-        from scipy.optimize import linear_sum_assignment
-
+    def follow_race(self, race_start_seconds):
         if race_start_seconds != self._race_start_seconds:
             self._race_start_seconds = race_start_seconds
             self._start_race()
+
+    def field(self):
+        if not self._read_frames_by_number:
+            return []
+        settings = self._settings
+        most_frames = max(self._read_frames_by_number.values())
+        return sorted(
+            number
+            for number, frames in self._read_frames_by_number.items()
+            if frames >= settings.field_entry_frames
+            and frames >= settings.field_entry_share * most_frames
+        )
+
+    def assign(self, frame, objects, number_probabilities, frame_width):
+        import numpy as np
+        from scipy.optimize import linear_sum_assignment
+
         racers = [
             row[5]
             for row in merge_covered_detections(
@@ -135,29 +152,39 @@ class RacerNumberSlots:
         self._previous_boxes = boxes
         self._previous_evidence = evidence
         settings = self._settings
-        scores = np.zeros((len(racers), number_count))
-        is_read = []
-        for row, (box, (weight, log_probabilities)) in enumerate(zip(boxes, evidence)):
-            is_read.append(weight >= settings.minimum_number_weight)
+        is_read = [weight >= settings.minimum_number_weight for weight, _ in evidence]
+        for read, (_, log_probabilities) in zip(is_read, evidence):
+            if read:
+                self._read_frames_by_number[int(np.argmax(log_probabilities)) + 1] += 1
+        field = self.field()
+        if not field:
+            return []
+        field_columns = [number - 1 for number in field]
+        scores = np.zeros((len(racers), len(field)))
+        for row, (box, (_, log_probabilities)) in enumerate(zip(boxes, evidence)):
             number_scores = (
                 log_probabilities
                 if is_read[row]
                 else np.full(number_count, np.log(1 / number_count))
             )
-            scores[row] = number_scores + self._position_scores(
-                frame, box, number_count
-            )
+            scores[row] = (
+                number_scores + self._position_scores(frame, box, number_count)
+            )[field_columns]
         rows, columns = linear_sum_assignment(scores, maximize=True)
         numbered = []
         for row, column in zip(rows, columns):
             score = scores[row, column]
             if score < settings.minimum_score:
                 continue
-            if not is_read[row] and score - np.delete(scores[row], column).max() < (
-                settings.unread_box_margin
-            ):
+            other_scores = np.delete(scores[row], column)
+            unread_without_margin = (
+                not is_read[row]
+                and other_scores.size > 0
+                and score - other_scores.max() < settings.unread_box_margin
+            )
+            if unread_without_margin:
                 continue
-            number = int(column) + 1
+            number = field[column]
             self._last_seen[number] = (boxes[row], frame)
             numbered.append((racers[row], number))
         return numbered
@@ -170,7 +197,9 @@ class RacerNumberTracker(InPlaceVideoTransform):
         "On frames carrying a race-window blob, gives each racer box one of the "
         "racer numbers from its number cloth readings on this and earlier "
         "frames and its distance from where each number was last seen, tags the "
-        "box with the number as its track id and writes a racer-numbers blob",
+        "box with the number as its track id and writes a racer-numbers blob "
+        "with the numbers and the field, the numbers read on enough frames of "
+        "the race",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
@@ -187,26 +216,24 @@ class RacerNumberTracker(InPlaceVideoTransform):
         window_blob = blobs.get(RACE_WINDOW_BLOB_NAME)
         if window_blob is None:
             return
+        self._slots.follow_race(json.loads(window_blob)["start_seconds"])
         meta = analytics.get_relation_meta(buf)
-        if not meta:
-            return
-        objects = analytics.read_objects(meta)
-        if not objects:
-            return
-        numbered = self._slots.assign(
-            self._frame,
-            json.loads(window_blob)["start_seconds"],
-            objects,
-            json.loads(blobs[RACER_NUMBER_PROBABILITIES_BLOB_NAME]),
-            self.width,
-        )
+        objects = analytics.read_objects(meta) if meta else []
+        numbered = []
+        if objects:
+            numbered = self._slots.assign(
+                self._frame,
+                objects,
+                json.loads(blobs[RACER_NUMBER_PROBABILITIES_BLOB_NAME]),
+                self.width,
+            )
         for racer, number in numbered:
             analytics.track_object(meta, racer, number)
-        if numbered:
-            blob = {str(number): number for _, number in numbered}
-            frameio.append_blob(
-                buf, RACER_NUMBERS_META_HEADER, json.dumps(blob).encode()
-            )
+        blob = {
+            "numbers_by_track_id": {str(number): number for _, number in numbered},
+            "field": self._slots.field(),
+        }
+        frameio.append_blob(buf, RACER_NUMBERS_META_HEADER, json.dumps(blob).encode())
 
 
 if backend.BACKEND == "gst":

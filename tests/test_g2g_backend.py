@@ -160,6 +160,7 @@ HOSTED_ELEMENT_MODULES = [
     "anonymize",
     "football_overlay",
     "baseball_overlay",
+    "racer_overlay",
     "overlay_counter",
     "clap",
     "vad",
@@ -2336,7 +2337,9 @@ def run_finish(timer, scene, frame_count, race_start_seconds, false_box_frame=No
         if race_start_seconds is None
         else {
             "race-window": json.dumps({"start_seconds": race_start_seconds}).encode(),
-            "racer-numbers": json.dumps({"1": 1, "2": 2}).encode(),
+            "racer-numbers": json.dumps(
+                {"numbers_by_track_id": {"1": 1, "2": 2}, "field": [1, 2]}
+            ).encode(),
         }
     )
     from utils.blob_headers import FINISH_LINE_META_HEADER
@@ -2500,6 +2503,99 @@ def test_finish_line_timer_ignores_frames_outside_the_race_window(monkeypatch):
     frames = run_finish(timer, scene, 8, race_start_seconds=None)
     assert frames[-1]["race_time_seconds"] is None
     assert frames[-1]["finish_line"] is None
+
+
+OVERLAY_WIDTH, OVERLAY_HEIGHT = 1280, 720
+OVERLAY_GREY = 128
+
+
+def racer_overlay_pixels(
+    number_cloths, racers, tracking_ids, numbers, field, finish=None
+):
+    pytest.importorskip("cv2")
+    from racer_overlay import RacerOverlay
+
+    overlay = RacerOverlay()
+    overlay.number_cloths = number_cloths
+    blobs = {
+        "race-window": json.dumps({"start_seconds": 0.0}).encode(),
+        "racer-numbers": json.dumps(
+            {"numbers_by_track_id": {str(n): n for n in numbers}, "field": field}
+        ).encode(),
+    }
+    if finish is not None:
+        blobs["finish-line"] = json.dumps(finish).encode()
+    frame = bytearray([OVERLAY_GREY]) * (OVERLAY_WIDTH * OVERLAY_HEIGHT * 4)
+    sink = StubMetaSink(
+        upstream_objects=[{"label": "horse", "score": 0.9, **box} for box in racers],
+        upstream_tracking_ids=tracking_ids,
+        upstream_blobs=blobs,
+        framerate=(50, 1),
+    )
+    overlay.g2g_process(frame, OVERLAY_WIDTH, OVERLAY_HEIGHT, "RGBA", sink)
+    return np.frombuffer(frame, dtype=np.uint8).reshape(
+        OVERLAY_HEIGHT, OVERLAY_WIDTH, 4
+    )
+
+
+def test_racer_overlay_joins_a_horse_box_to_its_tag_in_its_cloth_colour():
+    pytest.importorskip("cv2")
+    from racer_overlay import (
+        HEADER_HEIGHT,
+        NUMBER_CLOTHS,
+        NUMBER_COLUMN_TAG_TOP,
+        number_column_lefts,
+    )
+
+    box = {"x": 600, "y": 400, "w": 100, "h": 50}
+    field = [2, 5, 14]
+    pixels = racer_overlay_pixels("horse", [box], [14], [14], field)
+    cloth = NUMBER_CLOTHS["horse"][14].cloth_rgba[:3]
+    assert tuple(pixels[400, 610, :3]) == cloth
+    tag_left = number_column_lefts(field, OVERLAY_WIDTH)[14]
+    assert tuple(pixels[NUMBER_COLUMN_TAG_TOP + 2, tag_left + 2, :3]) == cloth
+    line_row = pixels[(400 + HEADER_HEIGHT) // 2, :, :3]
+    assert (line_row != OVERLAY_GREY).any(), "no line to the tag"
+
+
+def test_racer_overlay_shows_tags_for_the_numbers_of_the_field_only():
+    pytest.importorskip("cv2")
+    from racer_overlay import HEADER_HEIGHT, NUMBER_CLOTHS
+
+    pixels = racer_overlay_pixels("horse", [], [], [], [3, 14])
+    header_colours = {
+        tuple(pixel) for pixel in pixels[:HEADER_HEIGHT, :, :3].reshape(-1, 3)
+    }
+    assert NUMBER_CLOTHS["horse"][3].cloth_rgba[:3] in header_colours
+    assert NUMBER_CLOTHS["horse"][1].cloth_rgba[:3] not in header_colours
+
+
+def test_racer_overlay_marks_an_unread_racer_and_skips_an_untracked_box():
+    pytest.importorskip("cv2")
+    from racer_overlay import UNNUMBERED_RACER_RGBA
+
+    unread = {"x": 200, "y": 400, "w": 100, "h": 50}
+    untracked = {"x": 800, "y": 400, "w": 100, "h": 50}
+    pixels = racer_overlay_pixels("horse", [unread, untracked], [3, None], [], [])
+    assert tuple(pixels[400, 250, :3]) == UNNUMBERED_RACER_RGBA[:3]
+    assert tuple(pixels[400, 850, :3]) == (OVERLAY_GREY,) * 3
+
+
+def test_racer_overlay_draws_the_finish_line_and_the_winner_of_the_finish_list():
+    pytest.importorskip("cv2")
+    from racer_overlay import LINE_RGBA, NUMBER_CLOTHS
+
+    finish = {
+        "line": [[640.0, 200.0], [640.0, 500.0]],
+        "first_crossing_seconds": 20.1,
+        "crossing_seconds_by_racer_number": {"5": 20.1},
+    }
+    pixels = racer_overlay_pixels("eight-rugs", [], [], [], [5], finish)
+    assert tuple(pixels[350, 640, :3]) == LINE_RGBA[:3]
+    winner_tag_y = OVERLAY_HEIGHT - 20
+    assert tuple(pixels[winner_tag_y, 46, :3]) == (
+        NUMBER_CLOTHS["eight-rugs"][5].cloth_rgba[:3]
+    )
 
 
 NUMBER_FRAME_SIZE = 64
@@ -2676,26 +2772,76 @@ def numbers_of_racers_on_each_frame(frames):
     return tagged
 
 
-def test_racer_number_tracker_tags_a_box_with_the_number_its_cloth_reads():
-    assert numbers_of_racers_on_each_frame([[(10, number_reading(3))]]) == [{0: 3}]
+def read_into_field(racers):
+    from racer_number_tracker import RacerNumberSlotSettings
+
+    return [racers] * RacerNumberSlotSettings().field_entry_frames
+
+
+def test_racer_number_tracker_tags_a_box_once_its_number_joins_the_field():
+    tagged = numbers_of_racers_on_each_frame(read_into_field([(10, number_reading(3))]))
+    assert tagged[-2:] == [{}, {0: 3}]
+
+
+def test_racer_number_tracker_gives_no_box_a_number_read_on_too_few_frames():
+    field = read_into_field([(10, number_reading(3))])
+    misread = [(10, number_reading(3)), (300, number_reading(7))]
+    assert numbers_of_racers_on_each_frame(field + [misread])[-1] == {0: 3}
+
+
+def test_racer_number_tracker_gives_no_box_a_number_read_far_less_than_the_others():
+    runner = [(10, number_reading(3))]
+    misread = [(10, number_reading(3)), (300, number_reading(7))]
+    frames = read_into_field(runner) * 12 + read_into_field(misread) + [misread]
+    assert numbers_of_racers_on_each_frame(frames)[-1] == {0: 3}
+
+
+def test_racer_number_tracker_writes_the_field_of_the_race():
+    pytest.importorskip("scipy")
+    from racer_number_tracker import RacerNumberSlotSettings, RacerNumberTracker
+    from utils.blob_headers import RACER_NUMBERS_META_HEADER
+
+    tracker = RacerNumberTracker()
+    reading = {"0": number_reading(3)}
+    for _ in range(RacerNumberSlotSettings().field_entry_frames):
+        sink = StubMetaSink(
+            upstream_objects=[
+                {"label": "racer", "score": 0.9, "x": 10, "y": 100, "w": 40, "h": 20}
+            ],
+            upstream_blobs={
+                "race-window": json.dumps({"start_seconds": 1.0}).encode(),
+                "racer-number-probabilities": json.dumps(reading).encode(),
+            },
+        )
+        tracker.g2g_process(
+            bytearray(NUMBER_FRAME_WIDTH * 4), NUMBER_FRAME_WIDTH, 1, "RGBA", sink
+        )
+    [payload] = [
+        payload
+        for header, payload in sink.staged_blobs
+        if header == RACER_NUMBERS_META_HEADER.decode()
+    ]
+    assert json.loads(payload) == {"numbers_by_track_id": {"3": 3}, "field": [3]}
 
 
 def test_racer_number_tracker_gives_an_unread_box_the_number_last_seen_beside_it():
-    seen = [(10, number_reading(3))]
-    assert numbers_of_racers_on_each_frame([seen, [(12, NO_NUMBER_READING)]])[-1] == {
+    seen = read_into_field([(10, number_reading(3))])
+    assert numbers_of_racers_on_each_frame(seen + [[(12, NO_NUMBER_READING)]])[-1] == {
         0: 3
     }
-    assert numbers_of_racers_on_each_frame([seen, [(400, NO_NUMBER_READING)]])[-1] == {}
+    assert (
+        numbers_of_racers_on_each_frame(seen + [[(400, NO_NUMBER_READING)]])[-1] == {}
+    )
 
 
 def test_racer_number_tracker_gives_a_number_to_one_box_on_a_frame():
     racers = [(10, number_reading(4, 0.6)), (300, number_reading(4, 0.9))]
-    assert numbers_of_racers_on_each_frame([racers]) == [{1: 4}]
+    assert numbers_of_racers_on_each_frame(read_into_field(racers))[-1] == {1: 4}
 
 
 def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable():
     pytest.importorskip("scipy")
-    from racer_number_tracker import RacerNumberSlots
+    from racer_number_tracker import RacerNumberSlots, RacerNumberSlotSettings
 
     def racers(x):
         return [
@@ -2703,23 +2849,26 @@ def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable
             for row, y in enumerate([100, 115])
         ]
 
-    slots = RacerNumberSlots()
+    slots = RacerNumberSlots(RacerNumberSlotSettings(field_entry_frames=1))
     read = {"0": number_reading(3), "1": number_reading(5)}
-    slots.assign(0, 1.0, racers(10), read, NUMBER_FRAME_WIDTH)
+    slots.assign(0, racers(10), read, NUMBER_FRAME_WIDTH)
     unread = {"0": NO_NUMBER_READING, "1": NO_NUMBER_READING}
-    numbered = slots.assign(1, 1.0, racers(12), unread, NUMBER_FRAME_WIDTH)
+    numbered = slots.assign(1, racers(12), unread, NUMBER_FRAME_WIDTH)
     assert {racer["y"]: number for racer, number in numbered} == {100: 3, 115: 5}
 
 
 def test_racer_number_tracker_gives_numbers_past_8_when_the_readings_have_them():
     reading = number_reading(12, number_count=14)
-    assert numbers_of_racers_on_each_frame([[(10, reading)]]) == [{0: 12}]
+    assert numbers_of_racers_on_each_frame(read_into_field([(10, reading)]))[-1] == {
+        0: 12
+    }
 
 
 def test_racer_number_tracker_ignores_the_cloth_of_a_box_at_the_frame_edge():
-    assert numbers_of_racers_on_each_frame([[(0, number_reading(7))]]) == [{}]
-    inside = numbers_of_racers_on_each_frame([[(1, number_reading(7))]])
-    assert inside == [{0: 7}]
+    at_edge = numbers_of_racers_on_each_frame(read_into_field([(0, number_reading(7))]))
+    assert at_edge[-1] == {}
+    inside = numbers_of_racers_on_each_frame(read_into_field([(1, number_reading(7))]))
+    assert inside[-1] == {0: 7}
 
 
 def tagged_race_starts(
