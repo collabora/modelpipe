@@ -9,17 +9,22 @@
 import os
 
 from huggingface_hub import hf_hub_download
+from rfdetr.assets.model_weights import download_pretrain_weights
 
 REPO_ID = "boxerab/modelpipe-horse-racing"
 LOCAL_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "models", "horse_racing"
 )
 MODEL_FILES = ("race_state.pth", "race_start_window.pth", "numbers.pth")
+DETECTOR_FILE = "rf-detr-medium.pth"
 
 
 def main():
     for name in MODEL_FILES:
         print(hf_hub_download(repo_id=REPO_ID, filename=name, local_dir=LOCAL_DIR))
+    detector = os.path.join(LOCAL_DIR, DETECTOR_FILE)
+    download_pretrain_weights(detector)
+    print(detector)
 
 
 if __name__ == "__main__":

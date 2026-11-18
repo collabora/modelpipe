@@ -219,6 +219,9 @@ display and camera mode and a `HOST=gst` switch to run the same pipeline on
 - [Baseball](demo/baseball/README.md): the stock COCO YOLO weights, a tracker,
   and an overlay that marks the batter, fielders, bat, glove and ball with a
   ball trail. No training needed.
+- [Horse racing](demo/horse_racing/README.md): race start detection, RF-DETR
+  horses, and saddle cloth numbers read and tracked through the race, on TV
+  broadcasts from La Rinconada. File and display modes only.
 
 ```
 demo/baseball/run.sh display

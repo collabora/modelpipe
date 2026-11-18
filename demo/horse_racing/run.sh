@@ -10,7 +10,7 @@ if [[ -z "${MODELS:-}" ]]; then
   python demo/horse_racing/fetch_models.py >&2
   MODELS="$REPO/models/horse_racing"
 fi
-DETECTOR="${DETECTOR:-$HOME/.roboflow/models/rf-detr-medium.pth}"
+DETECTOR="${DETECTOR:-$MODELS/rf-detr-medium.pth}"
 CONF="${CONF:-0.5}"
 WINDOW="${WINDOW:-120}"
 IN="${1:?usage: demo/horse_racing/run.sh INPUT.mp4 [OUTPUT.mp4|OUTPUT.jsonl]}"

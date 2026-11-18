@@ -14,17 +14,43 @@ same category and stays out of training.
 
 ## Run
 
+The pipeline needs an NVIDIA GPU and an H.264 MP4. The Commons races are
+WebM, so convert one first:
+
 ```bash
-demo/horse_racing/run.sh INPUT.mp4 OUTPUT.mp4
+ffmpeg -i "2026 Segula C Classic.webm" -c:v libx264 -crf 18 -an segula.mp4
+demo/horse_racing/run.sh segula.mp4 segula_out.mp4  # annotated video
+demo/horse_racing/run.sh segula.mp4                 # on screen
+demo/horse_racing/run.sh segula.mp4 segula.jsonl    # metadata, no video
 ```
 
-`run.sh` downloads the three models from
+`run.sh` downloads the three classifiers from
 [boxerab/modelpipe-horse-racing](https://huggingface.co/boxerab/modelpipe-horse-racing)
-into `models/horse_racing`. Set `MODELS` to a directory with your own
-`race_state.pth`, `race_start_window.pth` and `numbers.pth` to skip the
-download. The input has to be H.264 in MP4, so convert the Commons `.webm`
-files with ffmpeg first. An output ending in `.jsonl` gets the metadata
-instead of the video.
+and the RF-DETR Medium checkpoint into `models/horse_racing`.
+
+Environment variables:
+
+- `MODELS`: a directory with your own `race_state.pth`, `race_start_window.pth`,
+  `numbers.pth` and `rf-detr-medium.pth`. Setting it skips the download.
+- `DETECTOR`: another RF-DETR checkpoint, `$MODELS/rf-detr-medium.pth` by
+  default.
+- `CONF`: the horse detection threshold, 0.5 by default.
+- `WINDOW`: seconds after the start that horses are detected and numbered,
+  120 by default.
+- `HOST`: `g2g` by default, `gst` runs the same pipeline on `gst-launch-1.0`.
+
+`mp_race_start` marks the frames from the gates opening until `WINDOW` runs
+out, and the other elements only work on those frames. On each one,
+`mp_racer_number_classifier` reads the saddle cloth of every horse box and
+`mp_racer_number_tracker` gives each box a number. A number joins the field of
+the race once it has been read on 25 frames and on at least a tenth as many
+frames as the most read number. Until then, boxes stay unnumbered. On split
+screen frames the close and wide views are numbered separately, so a horse
+can be numbered in both.
+
+`mp_racer_overlay` draws a header bar with the race clock and a tag for each
+number of the field, each numbered horse in its cloth colour with a line up to
+its tag, and horses without a number as thin grey boxes.
 
 `DATA` below is one directory outside the repo. Run everything from the repo
 root with the venv active.
