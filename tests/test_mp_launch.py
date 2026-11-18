@@ -390,7 +390,6 @@ def test_the_elements_that_accept_device_frames_are_found(shells):
         "mp_depth",
         "mp_superres",
         "mp_tracker",
-        "mp_racer_number_tracker",
         "mp_anonymize",
         "mp_football_overlay",
         "mp_baseball_overlay",

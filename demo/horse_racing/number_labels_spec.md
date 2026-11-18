@@ -20,10 +20,10 @@ Cloth colours:
 | 10 | purple | white |
 | 11 | grey | red |
 | 12 | lime | black |
-| 13 | brown | white |
+| 13 | light blue | dark blue |
 | 14 | maroon | yellow |
 
-1 to 12 are seen on this footage, though the number on the turquoise 9 cloth looked dark blue rather than red. 13 and 14 are the common US colours and are not confirmed. Under the night lights yellow 4 looks gold and orange 7 looks red-orange, and pink 8 can look pale.
+1 to 13 are seen on this footage, though the number on the turquoise 9 cloth looked dark blue rather than red. 14 is the common US colour and is not confirmed. Under the night lights yellow 4 looks gold and orange 7 looks red-orange, and pink 8 can look pale.
 
 Rules:
 

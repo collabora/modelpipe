@@ -11,11 +11,11 @@ import dataclasses
 import json
 
 import backend
-from backend import (
-    analytics,
-    frameio,
-    InPlaceVideoTransform,
-    METADATA_FRAME_CAPABILITIES,
+from backend import analytics, frameio, InPlaceVideoTransform
+from backend.video_frame import (
+    RGBA_PIXEL_FORMATS,
+    SYSTEM_MEMORY,
+    VideoFrameCapabilities,
 )
 from tracker import iou_batch, merge_covered_detections
 from utils.blob_headers import (
@@ -50,19 +50,19 @@ class RacerNumberSlots:
         self._start_race()
 
     def _start_race(self):
-        self._last_seen = {}
+        self._last_seen_by_panel = collections.defaultdict(dict)
         self._read_frames_by_number = collections.Counter()
         self._previous_frame = None
         self._previous_boxes = []
         self._previous_evidence = []
 
-    def _position_scores(self, frame, box, number_count):
+    def _position_scores(self, frame, panel, box, number_count):
         import numpy as np
 
         settings = self._settings
         scores = np.full(number_count, settings.unknown_position_score)
         centre = np.array([box[0] + box[2] / 2, box[1] + box[3] / 2])
-        for number, (last_box, last_frame) in self._last_seen.items():
+        for number, (last_box, last_frame) in self._last_seen_by_panel[panel].items():
             frames_since = frame - last_frame
             if frames_since > settings.slot_memory_frames:
                 continue
@@ -130,7 +130,7 @@ class RacerNumberSlots:
             and frames >= settings.field_entry_share * most_frames
         )
 
-    def assign(self, frame, objects, number_probabilities, frame_width):
+    def assign(self, frame, objects, number_probabilities, frame_width, divider_row):
         import numpy as np
         from scipy.optimize import linear_sum_assignment
 
@@ -159,35 +159,67 @@ class RacerNumberSlots:
         field = self.field()
         if not field:
             return []
+        panels = [
+            0 if divider_row is None or box[1] + box[3] / 2 < divider_row else 1
+            for box in boxes
+        ]
         field_columns = [number - 1 for number in field]
-        scores = np.zeros((len(racers), len(field)))
-        for row, (box, (_, log_probabilities)) in enumerate(zip(boxes, evidence)):
-            number_scores = (
-                log_probabilities
-                if is_read[row]
-                else np.full(number_count, np.log(1 / number_count))
-            )
-            scores[row] = (
-                number_scores + self._position_scores(frame, box, number_count)
-            )[field_columns]
-        rows, columns = linear_sum_assignment(scores, maximize=True)
         numbered = []
-        for row, column in zip(rows, columns):
-            score = scores[row, column]
-            if score < settings.minimum_score:
-                continue
-            other_scores = np.delete(scores[row], column)
-            unread_without_margin = (
-                not is_read[row]
-                and other_scores.size > 0
-                and score - other_scores.max() < settings.unread_box_margin
-            )
-            if unread_without_margin:
-                continue
-            number = field[column]
-            self._last_seen[number] = (boxes[row], frame)
-            numbered.append((racers[row], number))
+        for panel in set(panels):
+            rows = [row for row, box_panel in enumerate(panels) if box_panel == panel]
+            scores = np.zeros((len(rows), len(field)))
+            for index, row in enumerate(rows):
+                number_scores = (
+                    evidence[row][1]
+                    if is_read[row]
+                    else np.full(number_count, np.log(1 / number_count))
+                )
+                scores[index] = (
+                    number_scores
+                    + self._position_scores(frame, panel, boxes[row], number_count)
+                )[field_columns]
+            indices, columns = linear_sum_assignment(scores, maximize=True)
+            for index, column in zip(indices, columns):
+                row = rows[index]
+                score = scores[index, column]
+                if score < settings.minimum_score:
+                    continue
+                other_scores = np.delete(scores[index], column)
+                unread_without_margin = (
+                    not is_read[row]
+                    and other_scores.size > 0
+                    and score - other_scores.max() < settings.unread_box_margin
+                )
+                if unread_without_margin:
+                    continue
+                number = field[column]
+                self._last_seen_by_panel[panel][number] = (boxes[row], frame)
+                numbered.append((racers[row], number))
         return numbered
+
+
+# la rinconada split screen banners have a line of 3 to 8 grey levels across the whole width, 4 rows tall at 720p
+DIVIDER_DARK_LEVEL = 40
+DIVIDER_DARK_SHARE = 0.98
+DIVIDER_CLEARANCE_ROWS_PER_720 = 10
+
+
+def split_screen_divider_row(frame):
+    import numpy as np
+
+    height = frame.shape[0]
+    clearance = round(height * DIVIDER_CLEARANCE_ROWS_PER_720 / 720)
+    first_row, last_row = int(height * 0.3), int(height * 0.7)
+    band = frame[first_row - clearance : last_row + clearance, :, :3]
+    dark_share = (band.max(axis=2) < DIVIDER_DARK_LEVEL).mean(axis=1)
+    row_count = last_row - first_row
+    is_divider = (
+        (dark_share[clearance : clearance + row_count] >= DIVIDER_DARK_SHARE)
+        & (dark_share[:row_count] < 0.5)
+        & (dark_share[2 * clearance : 2 * clearance + row_count] < 0.5)
+    )
+    divider_rows = np.flatnonzero(is_divider)
+    return int(first_row + divider_rows[0]) if divider_rows.size else None
 
 
 class RacerNumberTracker(InPlaceVideoTransform):
@@ -199,11 +231,15 @@ class RacerNumberTracker(InPlaceVideoTransform):
         "frames and its distance from where each number was last seen, tags the "
         "box with the number as its track id and writes a racer-numbers blob "
         "with the numbers and the field, the numbers read on enough frames of "
-        "the race",
+        "the race. On split screen frames, where a dark line crosses the middle "
+        "of the frame, the boxes above and below the line are numbered "
+        "separately, so a number can be on one box in each view",
         "Aaron Boxer <aaron.boxer@collabora.com>",
     )
 
-    FRAME_CAPABILITIES = METADATA_FRAME_CAPABILITIES
+    FRAME_CAPABILITIES = VideoFrameCapabilities(
+        (SYSTEM_MEMORY,), RGBA_PIXEL_FORMATS, True, False
+    )
 
     def __init__(self):
         super().__init__()
@@ -226,6 +262,7 @@ class RacerNumberTracker(InPlaceVideoTransform):
                 objects,
                 json.loads(blobs[RACER_NUMBER_PROBABILITIES_BLOB_NAME]),
                 self.width,
+                split_screen_divider_row(frame),
             )
         for racer, number in numbered:
             analytics.track_object(meta, racer, number)

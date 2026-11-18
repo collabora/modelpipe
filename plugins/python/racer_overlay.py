@@ -66,7 +66,7 @@ NUMBER_CLOTHS = {
         10: number_cloth((130, 50, 180, 255), WHITE),
         11: number_cloth((150, 150, 150, 255), (220, 40, 40, 255)),
         12: number_cloth((170, 230, 40, 255), BLACK),
-        13: number_cloth((140, 80, 40, 255), WHITE),
+        13: number_cloth((150, 200, 240, 255), (20, 50, 150, 255)),
         14: number_cloth((150, 20, 50, 255), YELLOW),
     },
 }
@@ -107,6 +107,31 @@ def number_column_lefts(numbers, frame_width):
     return {
         number: NUMBER_COLUMN_LEFT + index * step
         for index, number in enumerate(numbers)
+    }
+
+
+def finish_time_text_width(text):
+    import cv2
+
+    (width, _), _ = cv2.getTextSize(
+        text, cv2.FONT_HERSHEY_SIMPLEX, NUMBER_COLUMN_TIME_SCALE, TEXT_THICKNESS
+    )
+    return width
+
+
+NUMBER_COLUMN_STAGGERED_TIME_YS = (60, 84)
+FINISH_TIME_GAP = 8
+
+
+def finish_time_baselines(column_lefts):
+    lefts = list(column_lefts.values())
+    widest_text = f"000.00({'0' * len(str(len(lefts)))})"
+    widest = finish_time_text_width(widest_text) + FINISH_TIME_GAP
+    if len(lefts) < 2 or lefts[1] - lefts[0] >= widest:
+        return {number: NUMBER_COLUMN_TIME_Y for number in column_lefts}
+    return {
+        number: NUMBER_COLUMN_STAGGERED_TIME_YS[index % 2]
+        for index, number in enumerate(column_lefts)
     }
 
 
@@ -175,10 +200,14 @@ class RacerOverlay(InPlaceVideoTransform):
                 left,
                 NUMBER_COLUMN_TAG_TOP + NUMBER_TAG_HEIGHT,
             )
+        baselines = finish_time_baselines(column_lefts)
         for place, (number, race_seconds) in enumerate(finished, 1):
+            text = f"{race_seconds:.2f}({place})"
+            text_width = finish_time_text_width(text)
+            centre = column_lefts[number] + number_tag_width(number) // 2
             drawing.draw_text(
-                f"{race_seconds:.2f}({place})",
-                (column_lefts[number] - 30, NUMBER_COLUMN_TIME_Y),
+                text,
+                (min(centre - text_width // 2, width - text_width), baselines[number]),
                 NUMBER_COLUMN_TIME_SCALE,
                 cloths[number].on_black_rgba,
                 TEXT_THICKNESS,

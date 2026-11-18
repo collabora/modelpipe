@@ -2851,10 +2851,42 @@ def test_racer_number_slots_keep_the_number_read_on_a_box_while_it_is_unreadable
 
     slots = RacerNumberSlots(RacerNumberSlotSettings(field_entry_frames=1))
     read = {"0": number_reading(3), "1": number_reading(5)}
-    slots.assign(0, racers(10), read, NUMBER_FRAME_WIDTH)
+    slots.assign(0, racers(10), read, NUMBER_FRAME_WIDTH, divider_row=None)
     unread = {"0": NO_NUMBER_READING, "1": NO_NUMBER_READING}
-    numbered = slots.assign(1, racers(12), unread, NUMBER_FRAME_WIDTH)
+    numbered = slots.assign(1, racers(12), unread, NUMBER_FRAME_WIDTH, divider_row=None)
     assert {racer["y"]: number for racer, number in numbered} == {100: 3, 115: 5}
+
+
+def test_racer_number_slots_give_a_number_to_one_box_in_each_view_of_a_split_screen():
+    pytest.importorskip("scipy")
+    from racer_number_tracker import RacerNumberSlots, RacerNumberSlotSettings
+
+    positions = [(10, 100), (300, 100), (10, 500), (300, 500)]
+    racers = [
+        {"ref": ref, "score": 0.9, "x": x, "y": y, "w": 40, "h": 20}
+        for ref, (x, y) in enumerate(positions)
+    ]
+    readings = {
+        str(ref): number_reading(number) for ref, number in enumerate([3, 5, 3, 5])
+    }
+    slots = RacerNumberSlots(RacerNumberSlotSettings(field_entry_frames=1))
+    numbered = slots.assign(0, racers, readings, NUMBER_FRAME_WIDTH, divider_row=360)
+    assert {(racer["x"], racer["y"]): number for racer, number in numbered} == {
+        (10, 100): 3,
+        (300, 100): 5,
+        (10, 500): 3,
+        (300, 500): 5,
+    }
+
+
+def test_split_screen_divider_row_is_a_dark_line_across_the_middle_of_the_frame():
+    from racer_number_tracker import split_screen_divider_row
+
+    split = np.full((720, 1280, 4), 128, np.uint8)
+    split[357:361, :, :3] = 5
+    assert split_screen_divider_row(split) == 357
+    dark = np.full((720, 1280, 4), 5, np.uint8)
+    assert split_screen_divider_row(dark) is None
 
 
 def test_racer_number_tracker_gives_numbers_past_8_when_the_readings_have_them():

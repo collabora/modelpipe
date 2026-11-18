@@ -12,6 +12,20 @@ broadcasts in the Wikimedia Commons category
 marked PD-VenezuelaGov. The test race, "2026 Segula C Classic.webm", is in the
 same category and stays out of training.
 
+## Run
+
+```bash
+demo/horse_racing/run.sh INPUT.mp4 OUTPUT.mp4
+```
+
+`run.sh` downloads the three models from
+[boxerab/modelpipe-horse-racing](https://huggingface.co/boxerab/modelpipe-horse-racing)
+into `models/horse_racing`. Set `MODELS` to a directory with your own
+`race_state.pth`, `race_start_window.pth` and `numbers.pth` to skip the
+download. The input has to be H.264 in MP4, so convert the Commons `.webm`
+files with ffmpeg first. An output ending in `.jsonl` gets the metadata
+instead of the video.
+
 `DATA` below is one directory outside the repo. Run everything from the repo
 root with the venv active.
 

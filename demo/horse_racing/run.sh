@@ -6,7 +6,10 @@ cd "$REPO"
 source .venv/bin/activate
 
 export MP_BACKEND="${HOST:-g2g}"
-MODELS="${MODELS:?set MODELS to the directory with race_state.pth, race_start_window.pth and numbers.pth}"
+if [[ -z "${MODELS:-}" ]]; then
+  python demo/horse_racing/fetch_models.py >&2
+  MODELS="$REPO/models/horse_racing"
+fi
 DETECTOR="${DETECTOR:-$HOME/.roboflow/models/rf-detr-medium.pth}"
 CONF="${CONF:-0.5}"
 WINDOW="${WINDOW:-120}"
