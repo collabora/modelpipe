@@ -6,7 +6,6 @@ import pathlib
 import cv2
 import numpy as np
 
-CROPS_PER_RACE = 200
 CLUSTERS_PER_RACE = 14
 COLUMNS, ROWS = 5, 6
 CELL_WIDTH, CELL_HEIGHT = 300, 200
@@ -82,11 +81,12 @@ def write_sheets(named_images, output):
 def main():
     parser = argparse.ArgumentParser(
         description=f"Contact sheets of {COLUMNS * ROWS} numbered horse crops, "
-        f"{CROPS_PER_RACE} per race in colour cluster order"
+        "a sample of each race in colour cluster order"
     )
     parser.add_argument(
         "crops", type=pathlib.Path, help="output of extract_horse_crops.py"
     )
+    parser.add_argument("crops_per_race", type=int)
     parser.add_argument("output", type=pathlib.Path, help="directory for the sheets")
     arguments = parser.parse_args()
     by_race = collections.defaultdict(list)
@@ -96,7 +96,7 @@ def main():
     cv2.setRNGSeed(0)
     ordered = []
     for race in sorted(by_race):
-        names = random.choice(by_race[race], CROPS_PER_RACE, replace=False)
+        names = random.choice(by_race[race], arguments.crops_per_race, replace=False)
         images = [cv2.imread(str(arguments.crops / f"{name}.jpg")) for name in names]
         ordered += [(names[index], images[index]) for index in colour_order(images)]
     write_sheets(ordered, arguments.output)

@@ -74,21 +74,41 @@ being frames after the start called before it. The scene labellers agreed on
 
 ## Number cloth model
 
+`extract_horse_crops.py` keeps the horse boxes at least 30 px tall on every
+tenth frame of a race. The labelled crops come in three sets: REUNIÓN 01 at 200
+crops per race, cut when the minimum was 60 px, REUNIÓN 02 to 07 and 09 at 60
+per race for training, and REUNIÓN 08 at 60 per race for testing.
+`graphic_starts_more.csv` and `graphic_starts_08.csv` hold the rows of
+`graphic_starts.csv` for those broadcasts, without the duplicate races left
+blank in `labels/doors`.
+
 ```bash
-python demo/horse_racing/extract_horse_crops.py DATA/clips DATA/labels/graphic_starts.csv DATA/crops
-python demo/horse_racing/number_sheets.py DATA/crops DATA/number_sheets
+python demo/horse_racing/extract_horse_crops.py DATA/clips DATA/labels/graphic_starts_more.csv DATA/crops_more
+python demo/horse_racing/number_sheets.py DATA/crops_more 60 DATA/number_sheets_more
 ```
 
-Six Claude subagents of nine sheets each follow `number_labels_spec.md` and
-write `DATA/number_labels/batch_<n>.csv`. A seventh labels every tenth sheet
-into `DATA/number_labels/second.csv`.
+REUNIÓN 08 goes the same way into `DATA/crops_08` and `DATA/number_sheets_08`.
+Claude subagents of eight to ten sheets each follow `number_labels_spec.md` and
+write `batch_<n>.csv` into `DATA/number_labels_more` or `DATA/number_labels_08`.
+One more labels every tenth sheet of both sets into `second.csv`.
 
 ```bash
-PYTHONPATH=plugins/python python demo/horse_racing/merge_sheet_labels.py numbers DATA/number_sheets DATA/number_labels
+PYTHONPATH=plugins/python python demo/horse_racing/merge_sheet_labels.py numbers DATA/number_sheets_more DATA/number_labels_more
+PYTHONPATH=plugins/python python demo/horse_racing/merge_sheet_labels.py numbers DATA/number_sheets_08 DATA/number_labels_08
+```
+
+Copy the labelled crops of the three sets into `DATA/crops_labelled` with their
+rows of each `crops.csv`, join the three `labels.csv` files and train with
+REUNIÓN 08 held out:
+
+```bash
 PYTHONPATH=plugins/python python demo/horse_racing/train_numbers.py \
-  DATA/crops DATA/number_labels/labels.csv numbers.pth --test-races reunion_01_race_8
+  DATA/crops_labelled DATA/labels.csv numbers.pth --test-races reunion_08_race_{1..9} reunion_08_race_11
 ```
 
-On the REUNIÓN 01 crops the two labellers agreed on 157 of 180 crops, and every
-disagreement was a number against `none`. The classifier put 137 of 200 crops
-of the held out race in the labellers' class, most misses going to `none`.
+The two labellers agreed on 157 of 180 crops of REUNIÓN 01, 372 of 420 of the
+other training broadcasts and 56 of 60 of REUNIÓN 08. Nearly every
+disagreement was a number against `none`. On the 600 REUNIÓN 08 crops the
+classifier trained on all three sets was right on 468, against 437 for one
+trained on REUNIÓN 01 alone. It read 303 of the 365 numbered crops, against
+248, and gave a crop the wrong number 13 times, against 43.

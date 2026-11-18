@@ -11,7 +11,7 @@ from find_races import BROADCAST_SIZE
 
 COCO_HORSE = 19
 CONFIDENCE = 0.5
-MINIMUM_HEIGHT = 60
+MINIMUM_HEIGHT = 30
 FRAME_STEP = 10
 # the running order bar covers the bottom of the frame during a race
 BAR_TOP = 575
