@@ -72,12 +72,13 @@ NUMBER_CLOTHS = {
 }
 
 LINE_RGBA = (255, 40, 40, 255)
-UNNUMBERED_RACER_RGBA = (255, 230, 0, 255)
+UNNUMBERED_RACER_RGBA = (200, 200, 200, 255)
 HEADER_RGBA = BLACK
 TEXT_RGBA = WHITE
 TAG_OUTLINE_RGBA = (128, 128, 128, 255)
 LINE_THICKNESS = 2
 RACER_THICKNESS = 2
+UNNUMBERED_RACER_THICKNESS = 1
 NUMBER_TAG_HEIGHT = 26
 ONE_DIGIT_TAG_WIDTH, TWO_DIGIT_TAG_WIDTH = 24, 40
 NUMBER_TEXT_SCALE = 0.8
@@ -209,18 +210,23 @@ class RacerOverlay(InPlaceVideoTransform):
         if not meta:
             return
         for racer in analytics.read_objects(meta):
-            # mp_racer_number_tracker leaves boxes with no number untracked
-            if racer["track_id"] is None:
-                continue
             top_left = (int(racer["x"]), int(racer["y"]))
             bottom_right = (
                 int(racer["x"] + racer["w"]),
                 int(racer["y"] + racer["h"]),
             )
-            number = numbers_by_track_id.get(str(racer["track_id"]))
+            # mp_racer_number_tracker leaves boxes with no number untracked
+            number = (
+                None
+                if racer["track_id"] is None
+                else numbers_by_track_id.get(str(racer["track_id"]))
+            )
             if number is None:
                 drawing.draw_rectangle(
-                    top_left, bottom_right, UNNUMBERED_RACER_RGBA, RACER_THICKNESS
+                    top_left,
+                    bottom_right,
+                    UNNUMBERED_RACER_RGBA,
+                    UNNUMBERED_RACER_THICKNESS,
                 )
                 continue
             drawing.draw_rectangle(

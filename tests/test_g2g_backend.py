@@ -2570,7 +2570,7 @@ def test_racer_overlay_shows_tags_for_the_numbers_of_the_field_only():
     assert NUMBER_CLOTHS["horse"][1].cloth_rgba[:3] not in header_colours
 
 
-def test_racer_overlay_marks_an_unread_racer_and_skips_an_untracked_box():
+def test_racer_overlay_draws_every_racer_without_a_number_in_one_colour():
     pytest.importorskip("cv2")
     from racer_overlay import UNNUMBERED_RACER_RGBA
 
@@ -2578,7 +2578,7 @@ def test_racer_overlay_marks_an_unread_racer_and_skips_an_untracked_box():
     untracked = {"x": 800, "y": 400, "w": 100, "h": 50}
     pixels = racer_overlay_pixels("horse", [unread, untracked], [3, None], [], [])
     assert tuple(pixels[400, 250, :3]) == UNNUMBERED_RACER_RGBA[:3]
-    assert tuple(pixels[400, 850, :3]) == (OVERLAY_GREY,) * 3
+    assert tuple(pixels[400, 850, :3]) == UNNUMBERED_RACER_RGBA[:3]
 
 
 def test_racer_overlay_draws_the_finish_line_and_the_winner_of_the_finish_list():
