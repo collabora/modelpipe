@@ -59,6 +59,26 @@ def cell(image, number):
     return tile
 
 
+def write_sheets(named_images, output):
+    output.mkdir(parents=True, exist_ok=True)
+    per_sheet = COLUMNS * ROWS
+    for sheet, start in enumerate(range(0, len(named_images), per_sheet)):
+        batch = named_images[start : start + per_sheet]
+        tiles = [cell(image, number) for number, (_, image) in enumerate(batch, 1)]
+        tiles += [np.full_like(tiles[0], 255)] * (per_sheet - len(tiles))
+        image = np.vstack(
+            [np.hstack(tiles[r * COLUMNS : (r + 1) * COLUMNS]) for r in range(ROWS)]
+        )
+        cv2.imwrite(str(output / f"{sheet:04d}.png"), image)
+        with open(output / f"{sheet:04d}.csv", "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["number", "image"])
+            writer.writerows(
+                (number, name) for number, (name, _) in enumerate(batch, 1)
+            )
+    print(sheet + 1, "sheets")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=f"Contact sheets of {COLUMNS * ROWS} numbered horse crops, "
@@ -79,23 +99,7 @@ def main():
         names = random.choice(by_race[race], CROPS_PER_RACE, replace=False)
         images = [cv2.imread(str(arguments.crops / f"{name}.jpg")) for name in names]
         ordered += [(names[index], images[index]) for index in colour_order(images)]
-    arguments.output.mkdir(parents=True, exist_ok=True)
-    per_sheet = COLUMNS * ROWS
-    for sheet, start in enumerate(range(0, len(ordered), per_sheet)):
-        batch = ordered[start : start + per_sheet]
-        tiles = [cell(image, number) for number, (_, image) in enumerate(batch, 1)]
-        tiles += [np.full_like(tiles[0], 255)] * (per_sheet - len(tiles))
-        image = np.vstack(
-            [np.hstack(tiles[r * COLUMNS : (r + 1) * COLUMNS]) for r in range(ROWS)]
-        )
-        cv2.imwrite(str(arguments.output / f"{sheet:04d}.png"), image)
-        with open(arguments.output / f"{sheet:04d}.csv", "w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow(["number", "crop"])
-            writer.writerows(
-                (number, name) for number, (name, _) in enumerate(batch, 1)
-            )
-    print(sheet + 1, "sheets")
+    write_sheets(ordered, arguments.output)
 
 
 if __name__ == "__main__":

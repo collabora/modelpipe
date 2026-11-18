@@ -36,22 +36,41 @@ already has `DATA/races/<broadcast>.csv`.
 
 ## Start models
 
-The doors open between 0.27 s and 1.40 s before the timing graphic and the gap
-changes from race to race, so each race's door frame is labelled by hand. One
-Claude subagent per broadcast follows `door_labels_spec.md` and writes
-`DATA/labels/doors/<broadcast>.csv`.
+The doors open anywhere from 0.03 s to 2.5 s before the timing graphic, and on
+some races the graphic comes up seconds late, so each race's door frame is
+labelled by hand. One Claude subagent per broadcast follows
+`door_labels_spec.md` and writes `DATA/labels/doors/<broadcast>.csv`.
+`fetch_races.sh` cuts some races twice, the second copy after a "Válida"
+bumper card. Leave the duplicate's `door_frame` empty.
+
+The `other` class of the state model comes from the frames away from races,
+which also hold warm-ups, replays and gate shots:
 
 ```bash
-PYTHONPATH=plugins/python python demo/horse_racing/extract_start_frames.py DATA/clips DATA/labels/doors DATA/start_frames
-PYTHONPATH=plugins/python python demo/horse_racing/train_start_models.py window \
-  DATA/start_frames race_start_window.pth --test-races reunion_01_race_8 reunion_02_race_10
+python demo/horse_racing/frame_sheets.py DATA/other_frames 1200 DATA/other_sheets
 ```
 
-The window model runs out of memory on a 6 GB GPU at 512 px. On an RTX 3090 it
-put 147 of 154 held out frames in the right class. All 7 misses were frames
-after the start called before it.
+Four Claude subagents of ten sheets each follow `other_labels_spec.md` and
+write `DATA/other_labels/batch_<n>.csv`. A fifth labels every tenth sheet into
+`DATA/other_labels/second.csv`. `horses_running` frames are left out of
+training.
 
-TODO: add `DATA/other_frames` as the `other` class of the state model.
+```bash
+PYTHONPATH=plugins/python python demo/horse_racing/merge_sheet_labels.py other DATA/other_sheets DATA/other_labels
+PYTHONPATH=plugins/python python demo/horse_racing/extract_start_frames.py \
+  DATA/clips DATA/labels/doors DATA/other_frames DATA/other_labels/labels.csv DATA/start_frames
+PYTHONPATH=plugins/python python demo/horse_racing/train_start_models.py state \
+  DATA/start_frames race_state.pth --test-broadcasts reunion_08
+PYTHONPATH=plugins/python python demo/horse_racing/train_start_models.py window \
+  DATA/start_frames race_start_window.pth --test-broadcasts reunion_08
+```
+
+REUNIÓN 08 holds the Segula C race (`reunion_08_race_3`), so it is the test
+broadcast. The window model runs out of memory on a 6 GB GPU at 512 px, both
+were trained on an RTX 3090. On REUNIÓN 08 the state model put 2463 of 2478
+frames in the right class and the window model 993 of 1020, all 27 misses
+being frames after the start called before it. The scene labellers agreed on
+115 of 120 frames.
 
 ## Number cloth model
 
@@ -65,7 +84,7 @@ write `DATA/number_labels/batch_<n>.csv`. A seventh labels every tenth sheet
 into `DATA/number_labels/second.csv`.
 
 ```bash
-PYTHONPATH=plugins/python python demo/horse_racing/merge_number_labels.py DATA/number_sheets DATA/number_labels
+PYTHONPATH=plugins/python python demo/horse_racing/merge_sheet_labels.py numbers DATA/number_sheets DATA/number_labels
 PYTHONPATH=plugins/python python demo/horse_racing/train_numbers.py \
   DATA/crops DATA/number_labels/labels.csv numbers.pth --test-races reunion_01_race_8
 ```

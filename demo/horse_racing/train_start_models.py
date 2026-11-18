@@ -51,27 +51,30 @@ START_MODELS = {
 def main():
     parser = argparse.ArgumentParser(
         description="Train the race state or start window classifier of "
-        "mp_race_start and print its confusion matrix on the held out races"
+        "mp_race_start and print its confusion matrix on the held out broadcasts"
     )
     parser.add_argument("kind", choices=sorted(START_MODELS))
     parser.add_argument(
         "frames", type=pathlib.Path, help="output of extract_start_frames.py"
     )
     parser.add_argument("model", type=pathlib.Path)
-    parser.add_argument("--test-races", nargs="+", required=True)
+    parser.add_argument("--test-broadcasts", nargs="+", required=True)
     arguments = parser.parse_args()
     start_model = START_MODELS[arguments.kind]
     labelled = []
     for row in csv.DictReader(open(arguments.frames / "frames.csv")):
         if row["kind"] != arguments.kind:
             continue
-        name = start_model.class_of_seconds(float(row["seconds_from_start"]))
+        name = row["class"] or start_model.class_of_seconds(
+            float(row["seconds_from_start"])
+        )
         if name is not None:
             labelled.append((row["clip"], arguments.frames / row["path"], name))
     classes = sorted({name for _, _, name in labelled})
     split = {"train": [], "test": []}
     for clip, path, name in labelled:
-        part = "test" if clip in arguments.test_races else "train"
+        broadcast = clip.split("_race_")[0]
+        part = "test" if broadcast in arguments.test_broadcasts else "train"
         split[part].append((path, classes.index(name)))
     print(classes, {part: len(samples) for part, samples in split.items()})
     network = train_image_classifier(

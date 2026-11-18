@@ -4,7 +4,7 @@ import pathlib
 
 import numpy as np
 
-from merge_number_labels import CLASSES
+from merge_sheet_labels import SHEET_CLASSES
 from utils.image_classifier import load_image_classifier, save_image_classifier
 from utils.image_classifier_training import (
     DEVICE,
@@ -15,6 +15,7 @@ from utils.image_classifier_training import (
 ARCHITECTURE = "resnet18"
 IMAGE_SIZE = 128
 EPOCHS = 40
+CLASSES = SHEET_CLASSES["numbers"]
 
 
 def main():
@@ -26,7 +27,7 @@ def main():
         "crops", type=pathlib.Path, help="output of extract_horse_crops.py"
     )
     parser.add_argument(
-        "labels", type=pathlib.Path, help="labels.csv of merge_number_labels.py"
+        "labels", type=pathlib.Path, help="labels.csv of merge_sheet_labels.py"
     )
     parser.add_argument("model", type=pathlib.Path)
     parser.add_argument("--test-races", nargs="+", required=True)
@@ -37,9 +38,9 @@ def main():
     }
     split = {"train": [], "test": []}
     for row in csv.DictReader(open(arguments.labels)):
-        name = "test" if race_of[row["crop"]] in arguments.test_races else "train"
+        name = "test" if race_of[row["image"]] in arguments.test_races else "train"
         split[name].append(
-            (arguments.crops / f"{row['crop']}.jpg", CLASSES.index(row["class"]))
+            (arguments.crops / f"{row['image']}.jpg", CLASSES.index(row["class"]))
         )
     print({name: len(samples) for name, samples in split.items()})
     network = train_image_classifier(

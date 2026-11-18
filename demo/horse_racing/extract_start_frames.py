@@ -11,6 +11,8 @@ from race_start import STATE_FRAME_SIZE, STATE_INTERVAL_FRAMES, WINDOW_FRAME_SIZ
 
 FIRST_SECONDS, LAST_SECONDS = -6.0, 15.0
 WINDOW_SECONDS = 1.0
+# horses running away from the live races are replays and warm-ups
+STATE_CLASSES_AWAY_FROM_RACES = {"other", "gate_scene"}
 
 
 def clip_frames(clip, first_frame, last_frame):
@@ -47,13 +49,24 @@ def clip_frames(clip, first_frame, last_frame):
 def main():
     parser = argparse.ArgumentParser(
         description="Save frames around each start, squashed to the start "
-        "classifier sizes, with their seconds from the doors opening"
+        "classifier sizes, with their seconds from the doors opening, and the "
+        "labelled frames away from races as state frames of their class"
     )
     parser.add_argument("clips", type=pathlib.Path)
     parser.add_argument(
         "doors",
         type=pathlib.Path,
         help="directory of CSV files with the door_frame of each clip",
+    )
+    parser.add_argument(
+        "other_frames",
+        type=pathlib.Path,
+        help="directory of <broadcast>_<seconds>.jpg written by sample_other_frames.py",
+    )
+    parser.add_argument(
+        "other_labels",
+        type=pathlib.Path,
+        help="labels.csv of merge_sheet_labels.py other",
     )
     parser.add_argument(
         "output", type=pathlib.Path, help="directory for state/, window/ and frames.csv"
@@ -63,7 +76,9 @@ def main():
         (arguments.output / kind).mkdir(parents=True, exist_ok=True)
     with open(arguments.output / "frames.csv", "w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["kind", "clip", "frame", "seconds_from_start", "path"])
+        writer.writerow(
+            ["kind", "clip", "frame", "seconds_from_start", "class", "path"]
+        )
         rows = [
             row
             for path in sorted(arguments.doors.glob("*.csv"))
@@ -110,8 +125,24 @@ def main():
                         str(arguments.output / path),
                         cv2.resize(image, (size, size), interpolation=cv2.INTER_AREA),
                     )
-                    writer.writerow([kind, row["clip"], frame, f"{seconds:.4f}", path])
+                    writer.writerow(
+                        [kind, row["clip"], frame, f"{seconds:.4f}", "", path]
+                    )
             print(row["clip"], flush=True)
+        for label in csv.DictReader(open(arguments.other_labels)):
+            if label["class"] not in STATE_CLASSES_AWAY_FROM_RACES:
+                continue
+            broadcast = label["image"].rsplit("_", 1)[0]
+            path = f"state/{label['image']}.jpg"
+            cv2.imwrite(
+                str(arguments.output / path),
+                cv2.resize(
+                    cv2.imread(str(arguments.other_frames / f"{label['image']}.jpg")),
+                    (STATE_FRAME_SIZE, STATE_FRAME_SIZE),
+                    interpolation=cv2.INTER_AREA,
+                ),
+            )
+            writer.writerow(["state", broadcast, "", "", label["class"], path])
 
 
 if __name__ == "__main__":
